@@ -7,7 +7,10 @@ import { SOLANA } from "./config";
 
 interface Endpoint {
   url: string;
-  nextAt: number;
+  /** When the last request actually left for this endpoint. */
+  lastAt: number;
+  /** Requests take their turn one after another (keeps the real spacing, not just the plan). */
+  queue: Promise<void>;
   cooldownUntil: number;
   failures: number;
 }
@@ -32,15 +35,25 @@ export class RpcPool {
     private readonly timeoutMs = SOLANA.rpcTimeoutMs,
     private readonly doFetch: typeof fetch = (...a) => fetch(...a),
   ) {
-    this.endpoints = [...new Set(urls.filter(Boolean))].map((url) => ({ url, nextAt: 0, cooldownUntil: 0, failures: 0 }));
+    this.endpoints = [...new Set(urls.filter(Boolean))].map((url) => ({ url, lastAt: 0, queue: Promise.resolve(), cooldownUntil: 0, failures: 0 }));
   }
 
-  /** Reserve a slot on the endpoint respecting the minimum interval; resolves when it is our turn. */
+  /**
+   * Wait for our turn on the endpoint: at least minIntervalMs after the previous request actually
+   * left (measured, so a late timer can never squeeze two requests closer together).
+   */
   private async slot(ep: Endpoint): Promise<void> {
-    const now = Date.now();
-    const at = Math.max(now, ep.nextAt);
-    ep.nextAt = at + this.minIntervalMs;
-    if (at > now) await sleep(at - now);
+    const prev = ep.queue;
+    let release!: () => void;
+    ep.queue = new Promise<void>((r) => (release = r));
+    await prev;
+    let wait = ep.lastAt + this.minIntervalMs - Date.now();
+    while (wait > 0) {
+      await sleep(wait);
+      wait = ep.lastAt + this.minIntervalMs - Date.now();
+    }
+    ep.lastAt = Date.now();
+    release();
   }
 
   /** fetch-compatible: the URL argument is ignored, the pool picks the endpoint. */
