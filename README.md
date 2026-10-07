@@ -11,7 +11,9 @@
 
 ## Где поиграть
 
-Тестовая версия на хостинге iDos (Staged, игроки её пока не видят): https://je8w0z54.idos.games/v/bld915d489f1c8744a89f5deb36052bc445/index.html
+- **Live:** https://je8w0z54.idos.games/ (версия 2, `bld4bcce369d4ce4a348b4d3b34979e520c`)
+- **Страница на iDos:** https://idosgames.com/app/JE8W0Z54/
+- Сборка для iDos делается с версионированным `AssetBase`: `npx vite build --base=<AssetBase из begin_build_upload>`. Тогда метаданные NFT-значков получают постоянные URI.
 
 ## Как запустить
 
