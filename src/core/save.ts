@@ -6,7 +6,7 @@ import { START_ROOMS, type RoomId } from "../meta/rooms";
 import { emptyUpgrades, type UpgradeLevels } from "../meta/upgrades";
 import type { FacultyId } from "../social/faculties";
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface QuestProgress {
   id: string;
@@ -21,16 +21,20 @@ export interface LocalScore {
   at: number;
   day: string;
   week: string;
-  wallet?: string | null;
-  verifiedTx?: string | null;
 }
 
+/** Solana actions on mainnet (wallet ↔ profile link, achievement-badge mints). */
 export interface OnchainRecord {
-  kind: "student-id" | "score-memo" | "airdrop";
+  kind: "wallet-link" | "nft-mint";
   signature: string;
   at: number;
-  cluster: "devnet" | "mainnet" | "mock";
   note: string;
+}
+
+export interface MintedBadge {
+  asset: string;
+  signature: string;
+  at: number;
 }
 
 export interface Materials {
@@ -89,7 +93,14 @@ export interface SaveData {
   lastTower: RoomId[];
   war: { lastRewardWeek: string };
   settings: Settings;
-  wallet: { address: string | null; walletName: string | null; studentIdSig: string | null; records: OnchainRecord[] };
+  wallet: {
+    address: string | null;
+    walletName: string | null;
+    /** Linked to the iDos profile via auth.linkWallet (server-verified signature). */
+    linkedToProfile: boolean;
+    records: OnchainRecord[];
+    minted: Record<string, MintedBadge>;
+  };
 }
 
 function randomId(): string {
@@ -146,7 +157,7 @@ export function defaultSave(): SaveData {
     lastTower: [],
     war: { lastRewardWeek: "" },
     settings: { music: 0.5, sfx: 0.8, vibration: true, reducedMotion: false, guide: true, online: true, analytics: true },
-    wallet: { address: null, walletName: null, studentIdSig: null, records: [] },
+    wallet: { address: null, walletName: null, linkedToProfile: false, records: [], minted: {} },
   };
 }
 
@@ -162,6 +173,21 @@ const MIGRATIONS: Migration[] = [
       settings: { online: true, analytics: true, ...settings },
       boosters: d.boosters ?? { shield: 0 },
       version: 2,
+    };
+  },
+  // v2 → v3: Solana is mainnet-only. Old test-network memo/airdrop/demo records and the local-only
+  // student-ID signature are dropped; badge mints and the iDos profile link are tracked instead.
+  (d) => {
+    const wallet = (d.wallet ?? {}) as Record<string, unknown>;
+    const scores = Array.isArray(d.scores) ? (d.scores as Record<string, unknown>[]) : [];
+    return {
+      ...d,
+      // The demo wallet is gone: its fake address must not look like a real one.
+      wallet: wallet.walletName === "Демо-кошелёк"
+        ? { address: null, walletName: null, linkedToProfile: false, records: [], minted: {} }
+        : { address: wallet.address ?? null, walletName: wallet.walletName ?? null, linkedToProfile: false, records: [], minted: {} },
+      scores: scores.map(({ wallet: _w, verifiedTx: _v, ...rest }) => rest),
+      version: 3,
     };
   },
 ];

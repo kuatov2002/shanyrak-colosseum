@@ -10,6 +10,8 @@ import { bar, button, toast } from "../components/common";
 import { hub } from "../components/shell";
 import { h } from "../dom";
 import { openStreak } from "./home";
+import { MINTABLE_IDS } from "../../solana/nft";
+import { mintAvailability, openMintDialog } from "../components/mint";
 
 type Tab = "daily" | "weekly" | "achievements";
 
@@ -102,6 +104,11 @@ export function questsScreen(app: App): Screen {
             h("span.lc-icon", null, got ? a.icon : "🔒"),
             h("div.lc-text", null, h("b", null, a.title), h("small", null, a.desc), h("small.muted", null, `Награда: ${rewardText(a.reward)}${a.reward.cosmetic ? " + косметика" : ""}`)),
             got ? h("span.chip.done", null, new Date(d.achievements[a.id]).toLocaleDateString("ru-RU")) : null,
+            got && MINTABLE_IDS.includes(a.id)
+              ? d.wallet.minted[a.id]
+                ? h("span.chip.done", null, "🏅 NFT")
+                : button("◎ Значок", () => (mintAvailability(app, a.id).can ? openMintDialog(app, a.id) : app.router.go("wallet")), { kind: "soft", title: "Сминтить значок-NFT (по желанию)" })
+              : null,
           ),
         );
       }

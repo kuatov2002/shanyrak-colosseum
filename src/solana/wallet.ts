@@ -1,13 +1,14 @@
-// Wallet layer. Discovers wallets through the Wallet Standard (Phantom, Solflare, Backpack… all
-// register themselves) and falls back to legacy injected providers. A clearly labelled demo wallet
-// lets judges try the flow without an extension. No private keys or seed phrases ever touch the game:
-// every signature happens inside the wallet, after the player presses a button.
+// Wallet layer (Solana mainnet). Discovers wallets through the Wallet Standard (Phantom, Solflare,
+// Backpack… all register themselves) and falls back to legacy injected providers. No private keys
+// or seed phrases ever touch the game: every signature happens inside the wallet, after the player
+// presses a button.
 
 import { getWallets } from "@wallet-standard/app";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { Emitter } from "../core/emitter";
+import { SOLANA } from "./config";
 
-export type WalletKind = "standard" | "injected" | "mock";
+export type WalletKind = "standard" | "injected";
 
 export interface WalletOption {
   id: string;
@@ -73,7 +74,7 @@ class StandardAdapter implements WalletAdapter {
     const [out] = await this.feature<SignTxFeature>("solana:signTransaction").signTransaction({
       account: this.account,
       transaction: bytes,
-      chain: "solana:devnet",
+      chain: SOLANA.chain,
     });
     return out.signedTransaction;
   }
@@ -114,48 +115,7 @@ class InjectedAdapter implements WalletAdapter {
   }
   async signTransaction(tx: SignableTx): Promise<Uint8Array> {
     const signed = await this.provider.signTransaction(tx);
-    return signed.serialize();
-  }
-}
-
-// ── Demo wallet (no extension needed; nothing is sent on-chain) ──────────────
-
-const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function fakeBase58(n: number): string {
-  const a = new Uint8Array(n);
-  crypto.getRandomValues(a);
-  return Array.from(a, (b) => B58[b % 58]).join("");
-}
-
-export class MockAdapter implements WalletAdapter {
-  readonly option: WalletOption = { id: "mock", name: "Демо-кошелёк", icon: null, kind: "mock" };
-  async connect(): Promise<string> {
-    await sleep(500);
-    let addr: string | null = null;
-    try {
-      addr = localStorage.getItem("shanyrak.mockWallet");
-    } catch {
-      /* ignore */
-    }
-    if (!addr) {
-      addr = fakeBase58(44);
-      try {
-        localStorage.setItem("shanyrak.mockWallet", addr);
-      } catch {
-        /* ignore */
-      }
-    }
-    return addr;
-  }
-  async disconnect(): Promise<void> {}
-  async signMessage(): Promise<Uint8Array> {
-    await sleep(700);
-    const sig = new Uint8Array(64);
-    crypto.getRandomValues(sig);
-    return sig;
-  }
-  async signTransaction(): Promise<Uint8Array> {
-    throw new Error("mock");
+    return signed.serialize({ requireAllSignatures: false, verifySignatures: false });
   }
 }
 
@@ -197,7 +157,6 @@ export class WalletManager {
     const list: WalletOption[] = this.standard.map((w) => new StandardAdapter(w).option);
     const names = new Set(list.map((o) => o.name.toLowerCase()));
     for (const [name] of this.injected()) if (!names.has(name.toLowerCase())) list.push({ id: `inj:${name}`, name, icon: null, kind: "injected" });
-    list.push({ id: "mock", name: "Демо-кошелёк", icon: null, kind: "mock" });
     return list;
   }
 
@@ -211,7 +170,6 @@ export class WalletManager {
   }
 
   private makeAdapter(id: string): WalletAdapter {
-    if (id === "mock") return new MockAdapter();
     if (id.startsWith("std:")) {
       const w = this.standard.find((x) => `std:${x.name}` === id);
       if (w) return new StandardAdapter(w);
@@ -252,9 +210,6 @@ export class WalletManager {
     this.changed.emit();
   }
 
-  get isMock(): boolean {
-    return this.adapter?.option.kind === "mock";
-  }
 }
 
 export function describeWalletError(err: unknown): string {

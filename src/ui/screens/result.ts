@@ -4,6 +4,7 @@
 import { MODES, MISSIONS } from "../../gameplay/modes";
 import { applyMetrics, WEEKLY_QUESTS } from "../../retention/quests";
 import { FACULTIES } from "../../social/faculties";
+import { MINTABLE_IDS } from "../../solana/nft";
 import type { App, Screen } from "../app";
 import { button, ornamentDivider, rarityBadge, toast } from "../components/common";
 import { fmt, h } from "../dom";
@@ -91,7 +92,7 @@ export function resultScreen(app: App): Screen {
           "div.wallet-invite",
           null,
           h("b", null, "◎ Solana — по желанию"),
-          h("p", null, "Подключите кошелёк, чтобы подписать студенческий билет и записать рекорд в Solana devnet. Игра полностью работает и без него."),
+          h("p", null, "Привяжите Solana-кошелёк к профилю (бесплатная подпись) и, если захотите, сминтите значок-NFT за достижение. Рейтинги и прогресс работают и без кошелька."),
           h(
             "div.row",
             null,
@@ -102,15 +103,12 @@ export function resultScreen(app: App): Screen {
             }, { kind: "ghost" }),
           ),
         )
-      : app.wallet.address && r.score > 0 && r.mode !== "tutorial"
+      : sum.achievements.some((a) => MINTABLE_IDS.includes(a.id))
         ? h(
             "div.wallet-invite.small",
             null,
-            h("span", null, "◎ Записать этот результат в Solana devnet?"),
-            button("Записать", () => {
-              void app.actions.recordScore(r.score, r.height);
-              app.router.go("wallet");
-            }, { kind: "primary" }),
+            h("span", null, "🏅 Новое достижение можно сминтить значком-NFT (по желанию)"),
+            button("Открыть", () => app.router.go("wallet"), { kind: "primary" }),
           )
         : null;
 

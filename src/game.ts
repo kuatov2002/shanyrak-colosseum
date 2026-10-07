@@ -119,7 +119,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
   analytics.enabled = store.data.settings.analytics;
   const leaderboards = new Leaderboards(store, () => backend);
   const wallet = new WalletManager();
-  const actions = new SolanaActions(store, wallet, (n, p) => analytics.track(n, p));
+  const actions = new SolanaActions(store, wallet, () => backend, (n, p) => analytics.track(n, p));
   const router = new Router(uiRoot);
 
   let detachRound: (() => void)[] = [];
@@ -319,7 +319,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
     } else {
       backend = new LocalBackend();
       store.setSession({ online: "offline", onlineError: res.error ?? null });
-      console.info("[idos] offline mode:", res.error);
+      // Offline is a normal mode (no network / iDos disabled): the reason is shown in Settings.
     }
   }
 

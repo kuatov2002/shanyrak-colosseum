@@ -1,22 +1,37 @@
-// Solana settings. Opt-in actions (records, airdrop) run on DEVNET so nothing costs real money;
-// the $SHAI token itself lives on mainnet and is only READ (balance display).
+// Solana settings — mainnet-beta only. The game uses Solana for exactly three things:
+//   1) reading the $SHAI balance (read-only RPC),
+//   2) linking the wallet to the iDos profile (signMessage of the iDos challenge, no transaction),
+//   3) optional achievement-badge mints (Metaplex Core, a transaction the player signs and pays).
+// Leaderboards are off-chain on iDos and never touch Solana.
 
 const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
 
 export const SOLANA = {
-  actionCluster: "devnet" as const,
-  devnetRpc: env.VITE_SOLANA_DEVNET_RPC || "https://api.devnet.solana.com",
-  mainnetRpc: env.VITE_SOLANA_MAINNET_RPC || "https://solana-rpc.publicnode.com",
-  memoProgramId: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+  cluster: "mainnet-beta" as const,
+  /** Wallet Standard chain id. */
+  chain: "solana:mainnet" as const,
+  /** iDos NetworkID of the title's Solana network (Blockchain.Networks.solana). */
+  idosNetworkId: "solana",
+  /** RPC endpoints in priority order; the pool fails over on error/timeout. */
+  rpcEndpoints: [
+    env.VITE_SOLANA_RPC || "https://solana-rpc.publicnode.com",
+    "https://api.mainnet-beta.solana.com",
+    "https://rpc.extrnode.com/solana-mainnet",
+  ],
+  /** Minimum spacing between two requests to the same endpoint. */
+  rpcMinIntervalMs: 200,
+  rpcTimeoutMs: 8000,
+  /** Metaplex Core program. */
+  coreProgramId: "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
   /**
-   * Project treasury for FUTURE fees (e.g. optional cosmetic mints). Not used by any action in this
-   * build — no transfer to it exists in the code. Set it when the treasury multisig is created.
+   * Project treasury for FUTURE fees. Not used by any action in this build — no transfer to it
+   * exists in the code, and treasury keys must never be shipped in the client.
    */
   treasury: null as string | null,
-  explorerTx(sig: string, cluster: "devnet" | "mainnet" = "devnet"): string {
-    return `https://explorer.solana.com/tx/${sig}${cluster === "devnet" ? "?cluster=devnet" : ""}`;
+  explorerTx(sig: string): string {
+    return `https://explorer.solana.com/tx/${sig}`;
   },
-  explorerAddress(addr: string, cluster: "devnet" | "mainnet" = "mainnet"): string {
-    return `https://explorer.solana.com/address/${addr}${cluster === "devnet" ? "?cluster=devnet" : ""}`;
+  explorerAddress(addr: string): string {
+    return `https://explorer.solana.com/address/${addr}`;
   },
 };

@@ -1,4 +1,5 @@
-// Leaderboards. Online: iDos server boards (daily_tower, best_height, weekly_score, faculty_*).
+// Leaderboards — off-chain only, on iDos server boards (daily_tower, best_height, weekly_score,
+// faculty_*) via client.leaderboard.submitScore. No Solana transactions are involved.
 // Offline (or while a fresh board is still empty): the player's own local results plus clearly
 // labelled demo rivals, so a board is never an unexplained empty list.
 
@@ -10,13 +11,12 @@ import type { RoundResult } from "../gameplay/types";
 import type { Backend } from "../platform/backend";
 import { FACULTIES, FACULTY_IDS, weeklyStandings, type FacultyId, type FacultyStanding } from "./faculties";
 
-export type BoardId = "daily_tower" | "best_height" | "weekly_score" | "wallets";
+export type BoardId = "daily_tower" | "best_height" | "weekly_score";
 
 export const BOARD_INFO: Record<BoardId, { title: string; unit: string; desc: string }> = {
   daily_tower: { title: "Ежедневная башня", unit: "очков", desc: "Один сид для всех на сутки (UTC). Лучший результат дня." },
   best_height: { title: "Рекорд высоты", unit: "этажей", desc: "Самая высокая башня за всё время." },
   weekly_score: { title: "Неделя кампуса", unit: "очков", desc: "Сумма очков всех раундов за неделю." },
-  wallets: { title: "Кошельки", unit: "очков", desc: "Рекорды, подтверждённые подписью Solana-кошелька." },
 };
 
 export interface Row {
@@ -45,24 +45,16 @@ function demoRows(board: BoardId, key: string, count: number): Row[] {
     const k = Math.pow(0.86, i) * rng.range(0.85, 1.1);
     const name = `${NAMES[(i * 5 + rng.int(0, NAMES.length - 1)) % NAMES.length]}`;
     const faculty = FACULTY_IDS[rng.int(0, FACULTY_IDS.length - 1)];
-    const wallet = board === "wallets" ? `${randBase58(rng, 4)}…${randBase58(rng, 4)}` : undefined;
     rows.push({
-      name: wallet ?? name,
+      name,
       score: Math.max(1, Math.round(base * k)),
       rank: 0,
       me: false,
       demo: true,
-      sub: board === "wallets" ? "демо-кошелёк" : `${FACULTIES[faculty].name} · демо`,
+      sub: `${FACULTIES[faculty].name} · демо`,
     });
   }
   return rows;
-}
-
-function randBase58(rng: Rng, n: number): string {
-  const abc = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  let s = "";
-  for (let i = 0; i < n; i++) s += abc[rng.int(0, abc.length - 1)];
-  return s;
 }
 
 function rankRows(rows: Row[]): Row[] {
@@ -91,7 +83,6 @@ export class Leaderboards {
       at: Date.now(),
       day: dayKey(),
       week: weekKey(),
-      wallet: d.wallet.address,
     };
     this.store.mutate((s) => {
       s.scores.unshift(entry);
@@ -117,8 +108,6 @@ export class Leaderboards {
         return d.stats.bestHeight;
       case "weekly_score":
         return d.scores.filter((s) => s.week === week && s.board !== "tutorial").reduce((a, s) => a + s.score, 0);
-      case "wallets":
-        return d.wallet.address ? Math.max(0, ...d.scores.filter((s) => s.wallet === d.wallet.address).map((s) => s.score)) : 0;
     }
   }
 
@@ -128,7 +117,7 @@ export class Leaderboards {
     const b = this.backend();
     const key = board === "weekly_score" ? weekKey() : board === "daily_tower" ? dayKey() : "all";
 
-    if (board !== "wallets" && b.online) {
+    if (b.online) {
       const res = await b.getBoard(board);
       if (res.ok) {
         const rows: Row[] = res.rows.map((r) => ({
@@ -155,24 +144,10 @@ export class Leaderboards {
 
     const mine = this.localScore(board);
     const rows = demoRows(board, key, 14);
-    if (mine > 0 || board !== "wallets") {
-      rows.push({
-        name: board === "wallets" && d.wallet.address ? shortAddress(d.wallet.address) : `${myName} (вы)`,
-        score: mine,
-        rank: 0,
-        me: true,
-        demo: false,
-        sub: board === "wallets" ? "ваш кошелёк" : undefined,
-      });
-    }
+    rows.push({ name: `${myName} (вы)`, score: mine, rank: 0, me: true, demo: false });
     rankRows(rows);
     const me = rows.find((r) => r.me);
-    const note =
-      board === "wallets"
-        ? d.wallet.address
-          ? "Ваши результаты, привязанные к кошельку, среди демо-кошельков. Подтвердите рекорд в devnet на экране кошелька."
-          : "Подключите кошелёк (необязательно), чтобы появиться в этой таблице. Строки «демо» — примеры."
-        : "Оффлайн-режим: ваш результат среди демо-соперников. Онлайн-рейтинг iDos включится при подключении к сети.";
+    const note = "Оффлайн-режим: ваш результат среди демо-соперников. Онлайн-рейтинг iDos включится при подключении к сети.";
     return { rows, source: "offline", note, myRank: me && me.score > 0 ? me.rank : null };
   }
 

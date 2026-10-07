@@ -22,7 +22,6 @@ export function leaderboardsScreen(app: App, params: Record<string, unknown>): S
       ["best_height", "Высота"],
       ["weekly_score", "Неделя"],
       ["faculties", "Факультеты"],
-      ["wallets", "Кошельки"],
     ];
     shell.body.appendChild(
       h("div.tabs", null, tabs.map(([id, label]) => h(`button.tab${tab === id ? ".active" : ""}`, { type: "button", onclick: () => { tab = id; build(); } }, label))),
@@ -93,7 +92,6 @@ export function leaderboardsScreen(app: App, params: Record<string, unknown>): S
           ),
         ),
         tab === "daily_tower" ? button("📅 Сыграть ежедневную башню", () => app.startRound("daily"), { kind: "gold" }) : "",
-        tab === "wallets" && !app.wallet.address ? button("◎ Подключить кошелёк", () => app.router.go("wallet"), { kind: "primary" }) : "",
       );
     });
   };

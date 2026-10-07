@@ -20,6 +20,11 @@ export interface Backend {
   submitScore(boardId: string, score: number): Promise<{ ok: boolean; error?: string }>;
   getBoard(boardId: string): Promise<BoardResult>;
   setName(name: string): Promise<void>;
+  /**
+   * Link a Solana wallet to the signed-in profile (iDos challenge → wallet signMessage → verify).
+   * No transaction, no fee.
+   */
+  linkWallet(address: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>): Promise<{ ok: boolean; error?: string }>;
   logEvent(name: string, params?: Record<string, string | number | boolean>, value?: number): void;
 }
 
@@ -39,5 +44,8 @@ export class LocalBackend implements Backend {
     return { ok: false, error: "offline" };
   }
   async setName(): Promise<void> {}
+  async linkWallet(): Promise<{ ok: boolean; error?: string }> {
+    return { ok: false, error: "Нужен онлайн-вход iDos: включите «Онлайн-рейтинги» в настройках и проверьте сеть." };
+  }
   logEvent(): void {}
 }

@@ -1,4 +1,4 @@
-// Profile as a student ID card ("студенческий билет"): name, faculty, stats, wallet signature.
+// Profile as a student ID card ("студенческий билет"): name, faculty, stats, iDos wallet link.
 
 import { FACULTIES } from "../../social/faculties";
 import { shortAddress } from "../../social/leaderboards";
@@ -30,7 +30,8 @@ export function profileScreen(app: App): Screen {
           field("Факультет", fac ? `«${fac.name}» — ${fac.field}` : "не выбран"),
           field("ID", d.player.id.slice(0, 10).toUpperCase()),
           field("Кошелёк", addr ? shortAddress(addr) : "гостевой режим"),
-          field("Подпись", d.wallet.studentIdSig ? `✓ ${d.wallet.studentIdSig.slice(0, 10)}…` : "—"),
+          field("Профиль iDos", d.wallet.linkedToProfile ? "✓ кошелёк привязан" : "кошелёк не привязан"),
+          field("Значки-NFT", `${Object.keys(d.wallet.minted).length}/4`),
         ),
       ),
       h("div.sc-foot", null, `Поступил(а): ${new Date(d.createdAt).toLocaleDateString("ru-RU")} · Сезон: ур. ${seasonTier(d.season.xp)}/${SEASON_TIERS.length}`),
