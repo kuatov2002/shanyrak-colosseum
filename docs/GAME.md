@@ -13,7 +13,7 @@
 
 ## Где поиграть
 
-- **Live:** https://je8w0z54.idos.games/ (версия 5, `bldb28c07e909414af0aae1951a09df13bf`)
+- **Live:** https://je8w0z54.idos.games/ (версия 6, `bldd3949a75e3644b09b86eaed821619a79`)
 - **Страница на iDos:** https://idosgames.com/app/JE8W0Z54/
 - Сборка для iDos делается с версионированным `AssetBase`: `npx vite build --base=<AssetBase из begin_build_upload>`. Тогда метаданные NFT-значков получают постоянные URI.
 

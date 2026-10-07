@@ -18,6 +18,8 @@
 
 ![Shanyrak — the crowned campus tower](docs/img/hero.jpg)
 
+> 🎬 **Trailer:** [docs/media/trailer.mp4](docs/media/trailer.mp4) — 40 s, rendered frame by frame from a real campaign round, with the game's own procedural sound.
+
 ---
 
 ## Submission to the iDos Games × Solana hackathon (Colosseum 2026)
@@ -74,6 +76,10 @@
 | Round | Bonus cards | Badges |
 |---|---|---|
 | ![Round with combo](docs/img/round.jpg) | ![Bonus choice](docs/img/bonus.jpg) | ![Solana badges](docs/img/badges.jpg) |
+
+| Hub on a phone | How to play | Solana, step by step |
+|---|---|---|
+| <img src="docs/img/hub-mobile.jpg" width="260" alt="Hub on a phone"> | <img src="docs/img/guide-mobile.jpg" width="260" alt="How to play"> | <img src="docs/img/wallet-mobile.jpg" width="260" alt="Solana screen"> |
 
 ---
 
