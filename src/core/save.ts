@@ -68,6 +68,8 @@ export interface SaveData {
   tutorialDone: boolean;
   firstResultSeen: boolean;
   walletPromptDismissed: boolean;
+  /** The "how the campus works" guide was shown once after the tutorial. */
+  guideSeen: boolean;
   shai: number;
   materials: Materials;
   upgrades: UpgradeLevels;
@@ -134,6 +136,7 @@ export function defaultSave(): SaveData {
     tutorialDone: false,
     firstResultSeen: false,
     walletPromptDismissed: false,
+    guideSeen: false,
     shai: 0,
     materials: { brick: 0, felt: 0, thread: 0 },
     upgrades: emptyUpgrades(),

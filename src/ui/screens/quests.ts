@@ -6,7 +6,7 @@ import { STREAK_REWARDS, streakClaimable } from "../../retention/daily";
 import { ACHIEVEMENTS, DAILY_ALL_BONUS, DAILY_QUESTS, isComplete, WEEKLY_QUESTS, type QuestDef, type QuestReward } from "../../retention/quests";
 import type { QuestProgress } from "../../core/save";
 import type { App, Screen } from "../app";
-import { bar, button, toast } from "../components/common";
+import { bar, button, screenIntro, toast } from "../components/common";
 import { hub } from "../components/shell";
 import { h } from "../dom";
 import { openStreak } from "./home";
@@ -32,6 +32,7 @@ export function questsScreen(app: App): Screen {
     const d = app.store.data;
     shell.body.innerHTML = "";
     const streak = streakClaimable(app.store);
+    shell.body.appendChild(screenIntro("📜", "Задания", "Цели на день и неделю. Прогресс идёт сам во время раундов — когда цель выполнена, нажмите «Забрать»."));
     shell.body.appendChild(
       h(
         `button.streak-banner${streak ? ".glow" : ""}`,

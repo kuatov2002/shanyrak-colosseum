@@ -10,6 +10,7 @@ import type { Round } from "../../gameplay/round";
 import { QUALITY_LABEL, type RoundEvent } from "../../gameplay/types";
 import type { App, Screen } from "../app";
 import { button, modal, type ModalHandle } from "../components/common";
+import { openGuide } from "../components/guide";
 import { fmt, h } from "../dom";
 
 export function roundScreen(app: App): Screen {
@@ -59,6 +60,7 @@ export function roundScreen(app: App): Screen {
           app.sound.setVolumes(app.store.data.settings.sfx, app.store.data.settings.music);
           resume();
         }),
+        button("❓ Как играть", () => openGuide(app, { inRound: true }), { kind: "soft" }),
         button("🏛️ Завершить раунд", () => {
           close();
           pauseModal = null;

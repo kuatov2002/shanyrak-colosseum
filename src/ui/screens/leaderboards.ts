@@ -4,7 +4,7 @@ import { formatCountdown, weekProgress } from "../../core/time";
 import { FACULTIES } from "../../social/faculties";
 import { BOARD_INFO, type BoardId, type BoardView } from "../../social/leaderboards";
 import type { App, Screen } from "../app";
-import { button } from "../components/common";
+import { button, screenIntro } from "../components/common";
 import { hub } from "../components/shell";
 import { fmt, h } from "../dom";
 
@@ -17,6 +17,7 @@ export function leaderboardsScreen(app: App, params: Record<string, unknown>): S
 
   const build = () => {
     shell.body.innerHTML = "";
+    shell.body.appendChild(screenIntro("🏆", "Рейтинг", "Онлайн-таблицы iDos Games. Ваш лучший результат попадает сюда сам после раунда — кошелёк не нужен."));
     const tabs: [Tab, string][] = [
       ["daily_tower", "День"],
       ["best_height", "Высота"],

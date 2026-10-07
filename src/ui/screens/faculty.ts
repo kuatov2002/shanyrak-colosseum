@@ -32,7 +32,7 @@ export function facultyScreen(app: App, params: Record<string, unknown>): Screen
         "div.faculty-wrap",
         null,
         h("h1.title", null, "Выберите факультет"),
-        h("p.muted.center", null, "Факультетские комнаты приносят очки в недельную войну факультетов. Победитель недели получает флаг, значок и $SHAI."),
+        h("p.muted.center", null, "Факультет — ваша команда. Очки из ваших раундов идут в недельное соревновение факультетов; победители получают флаг, значок и $SHAI. На силу в игре выбор не влияет, сменить можно в профиле."),
         ornamentDivider(),
         grid,
         h(

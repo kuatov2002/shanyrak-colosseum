@@ -1,15 +1,14 @@
-// Solana screen (mainnet). Guest mode is the default; connecting is optional and first offered after
-// the first result. Solana is used for exactly three things, each started by a button:
-// reading the $SHAI balance, linking the wallet to the iDos profile, and optional badge mints.
+// Solana screen (mainnet), written for players who have never used a wallet: three numbered steps
+// (connect → mint a badge → optionally link to the profile), technical details folded away.
+// Guest mode is the default; every on-chain action starts with a button.
 
 import { SOLANA } from "../../solana/config";
-import { STATUS_LABEL } from "../../solana/actions";
 import { MINTABLE_IDS, metadataBase } from "../../solana/nft";
 import { badgeDataUrl, badgeInfo } from "../../solana/nftArt";
 import { fetchShaiBalance, fetchSolBalance, SHAI_TOKEN } from "../../solana/token";
 import { shortAddress } from "../../social/leaderboards";
 import type { App, Screen } from "../app";
-import { button, toast } from "../components/common";
+import { button, screenIntro, toast } from "../components/common";
 import { mintAvailability, openMintDialog } from "../components/mint";
 import { hub } from "../components/shell";
 import { fmt, h } from "../dom";
@@ -36,163 +35,198 @@ export function walletScreen(app: App): Screen {
   const build = () => {
     const d = app.store.data;
     const w = app.wallet;
+    const connected = w.status === "connected" && !!w.address;
     shell.body.innerHTML = "";
     shell.body.append(
       h("div.back-row", null, button("← Кампус", () => app.router.go("home"), { kind: "ghost" })),
-      h(
-        "div.wallet-hero",
-        null,
-        h("h2", null, "◎ Solana"),
-        h("p", null, "Кошелёк не нужен, чтобы играть: рейтинги, задания и прогресс работают без него. Solana здесь — только для трёх добровольных вещей:"),
-        h(
-          "ul.safety",
-          null,
-          h("li", null, h("b", null, "Привязка к профилю iDos"), " — бесплатная подпись сообщения, без транзакции."),
-          h("li", null, h("b", null, "Значки-NFT за 4 достижения"), " — транзакция в mainnet, платит игрок (≈0.0016 SOL возвратного депозита + ≈0.00001 SOL комиссии, точная сумма до подписи)."),
-          h("li", null, h("b", null, "Баланс $SHAI"), " — только чтение."),
-          h("li", null, "Мы никогда не просим seed-фразу или приватный ключ. Каждая подпись — только по вашей кнопке."),
-        ),
+      screenIntro(
+        "◎",
+        "Solana — по желанию",
+        "Играть можно без кошелька: рейтинги, задания и прогресс работают и так. Кошелёк нужен только, чтобы выпустить значок-NFT за достижение — он останется у вас навсегда.",
       ),
     );
 
-    if (w.status === "connected" && w.address) {
-      shell.body.appendChild(
+    // ① Connect
+    const step1 = h(`div.wallet-step${connected ? ".done" : ""}`, null, h("span.ws-num", null, connected ? "✓" : "1"));
+    if (connected && w.address) {
+      step1.appendChild(
         h(
-          "div.connected-card",
+          "div.ws-body",
           null,
-          h("div", null, h("small.muted", null, `Подключён: ${w.adapter?.option.name ?? "кошелёк"} · Solana mainnet`), h("b.mono", null, shortAddress(w.address))),
-          h("div.balances", null, h("span", null, `SOL: ${solBalance}`), h("span", null, `$SHAI: ${shaiBalance}`)),
+          h("b", null, `Кошелёк подключён: ${w.adapter?.option.name ?? "кошелёк"}`),
+          h("span.mono", null, shortAddress(w.address)),
+          h("div.balances", null, h("span", null, `SOL: ${solBalance}`), h("span", null, `$SHAI в сети: ${shaiBalance}`)),
           h(
             "div.row",
             null,
-            button("↻ Балансы", () => void refreshBalances(), { kind: "soft" }),
+            button("↻ Обновить баланс", () => void refreshBalances(), { kind: "soft" }),
             button("Отключить", () => {
               void w.disconnect();
-              toast("Кошелёк отключён. Игра продолжается в гостевом режиме.", "info");
+              toast("Кошелёк отключён. Игра продолжается без него.", "info");
             }, { kind: "ghost" }),
           ),
         ),
       );
     } else {
       const options = w.options();
-      shell.body.appendChild(
+      step1.appendChild(
         h(
-          "div.connect-list",
+          "div.ws-body",
           null,
-          h("b", null, w.status === "connecting" ? "Ожидание кошелька… подтвердите подключение" : "Подключить кошелёк"),
+          h("b", null, w.status === "connecting" ? "Подтвердите подключение в окне кошелька…" : "Подключите кошелёк"),
+          h("small.muted", null, "Phantom, Solflare или Backpack, сеть Solana mainnet. Подключение ничего не списывает."),
           w.error ? h("p.ac-msg.error", null, w.error) : "",
-          options.map((o) =>
-            h(
-              "button.wallet-option",
-              {
-                type: "button",
-                disabled: w.status === "connecting",
-                onclick: async () => {
-                  const ok = await w.connect(o.id);
-                  if (ok) {
-                    app.store.mutate((s) => {
-                      if (s.wallet.address !== w.address) s.wallet.linkedToProfile = false;
-                      s.wallet.address = w.address;
-                      s.wallet.walletName = o.name;
-                    });
-                    app.analytics.track("wallet_connect", { kind: o.kind });
-                    toast("Кошелёк подключён", "success", "◎");
-                    void refreshBalances();
-                  }
+          h(
+            "div.wallet-options",
+            null,
+            options.map((o) =>
+              h(
+                "button.wallet-option",
+                {
+                  type: "button",
+                  disabled: w.status === "connecting",
+                  onclick: async () => {
+                    const ok = await w.connect(o.id);
+                    if (ok) {
+                      app.store.mutate((s) => {
+                        if (s.wallet.address !== w.address) s.wallet.linkedToProfile = false;
+                        s.wallet.address = w.address;
+                        s.wallet.walletName = o.name;
+                      });
+                      app.analytics.track("wallet_connect", { kind: o.kind });
+                      toast("Кошелёк подключён", "success", "◎");
+                      void refreshBalances();
+                    }
+                  },
                 },
-              },
-              o.icon ? h("img", { src: o.icon, alt: "", width: "24", height: "24" }) : h("span.wo-icon", null, "◎"),
-              h("span", null, h("b", null, o.name), h("small", null, o.kind === "standard" ? "Wallet Standard" : "Встроенный провайдер")),
+                o.icon ? h("img", { src: o.icon, alt: "", width: "24", height: "24" }) : h("span.wo-icon", null, "◎"),
+                h("span", null, h("b", null, o.name)),
+              ),
             ),
           ),
           options.length === 0
-            ? h("p.muted", null, "Кошельки Solana не найдены. Установите Phantom, Solflare или Backpack и обновите страницу. Внутри iframe на idosgames.com кошелёк может быть недоступен — откройте игру по её собственному адресу.")
+            ? h(
+                "p.muted",
+                null,
+                "Кошелёк не найден. Установите расширение ",
+                h("a.link", { href: "https://phantom.com/download", target: "_blank", rel: "noopener" }, "Phantom"),
+                " или ",
+                h("a.link", { href: "https://solflare.com/download", target: "_blank", rel: "noopener" }, "Solflare"),
+                " и обновите страницу. Если игра открыта внутри idosgames.com, откройте её по прямому адресу: кошельки во фрейме могут не работать.",
+              )
             : "",
         ),
       );
     }
 
-    // Link to the iDos profile
-    const link = app.actions.get("link");
-    const linked = d.wallet.linkedToProfile && d.wallet.address === w.address;
-    shell.body.append(
-      h("h3", null, "Профиль"),
+    // ② Badges
+    const base = metadataBase();
+    const step2 = h(
+      "div.wallet-step",
+      null,
+      h("span.ws-num", null, "2"),
       h(
-        `div.action-card.status-${linked ? "success" : link.status}`,
+        "div.ws-body",
         null,
-        h("div.ac-head", null, h("b", null, "🎓 Привязать кошелёк к профилю iDos"), h("span.status-chip", null, linked ? "✅ Привязан" : STATUS_LABEL[link.status])),
-        h("small", null, "iDos выдаёт одноразовое сообщение, вы подписываете его в кошельке, сервер проверяет подпись. Без транзакции и без комиссии."),
-        link.message ? h(`p.ac-msg${link.status === "error" ? ".error" : ""}`, null, link.message) : "",
+        h("b", null, "Выпустите значок за достижение"),
         h(
-          "div.row",
+          "small.muted",
           null,
-          button(link.status === "error" ? "↻ Повторить" : linked ? "Привязать заново" : "Подписать и привязать", () => void app.actions.linkProfile(), {
-            kind: "primary",
-            disabled: !w.address || app.actions.busy("link"),
+          "Значок — NFT в Solana с картинкой достижения. Стоит около 0.0018 SOL: почти всё это возвратный депозит за хранение, комиссия сети — тысячные доли цента. Точная сумма видна до подписи.",
+        ),
+        base ? "" : h("p.note", null, "Выпуск значков работает в опубликованной версии игры на iDos."),
+        h(
+          "div.grid-cards.badges",
+          null,
+          MINTABLE_IDS.map((id) => {
+            const info = badgeInfo(id);
+            const minted = d.wallet.minted[id];
+            const avail = mintAvailability(app, id);
+            const earned = !!d.achievements[id];
+            return h(
+              `div.item-card${earned ? "" : ".locked"}`,
+              null,
+              h("img.badge-img.small", { src: badgeDataUrl(id, 128), alt: info?.name ?? id, width: "96", height: "96" }),
+              h("b", null, info?.trait ?? id),
+              h("small", null, earned ? "Достижение получено" : info?.description ?? ""),
+              minted
+                ? h("a.link", { href: SOLANA.explorerAddress(minted.asset), target: "_blank", rel: "noopener" }, "✅ В кошельке ↗")
+                : button("◎ Выпустить", () => openMintDialog(app, id), { kind: avail.can ? "gold" : "ghost", disabled: !avail.can, title: avail.reason }),
+              !minted && !avail.can ? h("small.muted", null, avail.reason) : "",
+            );
           }),
-          app.store.session.online !== "online" ? h("small.muted", null, "Нужен онлайн-вход iDos") : "",
         ),
       ),
     );
 
-    // Achievement badges
-    const base = metadataBase();
-    shell.body.append(
-      h("h3", null, "Значки-NFT за достижения"),
-      h("p.muted", null, "Четыре значка — по желанию и только за реальные достижения. Игра полностью проходится без минта."),
-      base ? "" : h("p.note", null, "Минт включается в опубликованной на iDos версии: метаданные значков лежат по версионированному адресу билда, чтобы ссылки NFT не ломались после обновлений."),
+    // ③ Optional profile link
+    const link = app.actions.get("link");
+    const linked = d.wallet.linkedToProfile && d.wallet.address === w.address;
+    const step3 = h(
+      `div.wallet-step${linked ? ".done" : ""}`,
+      null,
+      h("span.ws-num", null, linked ? "✓" : "3"),
       h(
-        "div.grid-cards.badges",
+        "div.ws-body",
         null,
-        MINTABLE_IDS.map((id) => {
-          const info = badgeInfo(id);
-          const minted = d.wallet.minted[id];
-          const avail = mintAvailability(app, id);
-          return h(
-            `div.item-card${d.achievements[id] ? "" : ".locked"}`,
-            null,
-            h("img.badge-img.small", { src: badgeDataUrl(id, 128), alt: info?.name ?? id, width: "96", height: "96" }),
-            h("b", null, info?.trait ?? id),
-            h("small", null, info?.tier ?? ""),
-            minted
-              ? h("a.link", { href: SOLANA.explorerAddress(minted.asset), target: "_blank", rel: "noopener" }, "✅ В кошельке ↗")
-              : button("◎ Сминтить", () => openMintDialog(app, id), { kind: avail.can ? "gold" : "ghost", disabled: !avail.can, title: avail.reason }),
-            !minted && !avail.can ? h("small.muted", null, avail.reason) : "",
-          );
-        }),
+        h("b", null, "Необязательно: привяжите кошелёк к профилю"),
+        h("small.muted", null, "Бесплатная подпись сообщения (не транзакция): iDos запомнит, что этот кошелёк ваш. Пригодится для будущих наград по кошельку."),
+        link.message ? h(`p.ac-msg${link.status === "error" ? ".error" : ""}`, null, link.message) : "",
+        h(
+          "div.row",
+          null,
+          linked
+            ? h("span.status-chip.st-success", null, "✅ Привязан")
+            : button(link.status === "error" ? "↻ Повторить" : "Подписать и привязать", () => void app.actions.linkProfile(), {
+                kind: "primary",
+                disabled: !w.address || app.actions.busy("link"),
+              }),
+          !w.address ? h("small.muted", null, "Сначала подключите кошелёк") : app.store.session.online !== "online" ? h("small.muted", null, "Нужно подключение к iDos") : "",
+        ),
       ),
     );
 
-    // Token & treasury
-    shell.body.append(
-      h("h3", null, "Токен $SHAI"),
+    shell.body.append(h("div.wallet-steps", null, step1, step2, step3));
+
+    // Details for the curious: safety, the token, history
+    shell.body.appendChild(
       h(
-        "div.token-card",
+        "details.wallet-details",
         null,
-        h("p", null, h("b", null, `${SHAI_TOKEN.name} (${SHAI_TOKEN.symbol})`), ` · ${SHAI_TOKEN.network} · decimals ${SHAI_TOKEN.decimals}`),
-        h("p.mono.small", null, SHAI_TOKEN.mint),
-        h("a.link", { href: SOLANA.explorerAddress(SHAI_TOKEN.mint), target: "_blank", rel: "noopener" }, "Mint в Solana Explorer ↗"),
-        h("p.muted", null, `Внутри игры $SHAI — игровая валюта (iDos: ${SHAI_TOKEN.idosIouCurrencyId} / ${SHAI_TOKEN.idosCryptoCurrencyId}). Вывод и депозит токена работают через блокчейн-модуль iDos и в этой сборке не включены.`),
-        h("p.note", null, SHAI_TOKEN.disclaimer),
-      ),
-      h("h3", null, "Казна проекта"),
-      h("div.token-card", null, h("p", null, SOLANA.treasury ? h("span.mono", null, SOLANA.treasury) : "Адрес казны ещё не задан."), h("p.muted", null, "Казна нужна для будущих комиссий. Сейчас ни одно действие игры не переводит в неё средства, и ключей казны в игре нет.")),
-      h("h3", null, "История"),
-      d.wallet.records.length
-        ? h(
-            "div.board",
-            null,
-            d.wallet.records.slice(0, 10).map((r) =>
-              h(
-                "div.board-row",
-                null,
-                h("span.board-rank", null, r.kind === "nft-mint" ? "🏅" : "🎓"),
-                h("span.board-name", null, r.note, h("small", null, new Date(r.at).toLocaleString("ru-RU"))),
-                r.signature ? h("a.link", { href: SOLANA.explorerTx(r.signature), target: "_blank", rel: "noopener" }, "↗") : "",
+        h("summary", null, "Подробнее: безопасность, токен и история"),
+        h(
+          "ul.safety",
+          null,
+          h("li", null, "Мы никогда не просим seed-фразу или приватный ключ. Каждая подпись — только по вашей кнопке, в окне вашего кошелька."),
+          h("li", null, "Перед подписью транзакция проверяется симуляцией в mainnet, сумма показывается заранее."),
+          h("li", null, "Игра не берёт комиссий и ничего не переводит себе: платите вы только сети Solana."),
+        ),
+        h(
+          "div.token-card",
+          null,
+          h("p", null, h("b", null, `Токен ${SHAI_TOKEN.symbol}`), ` · ${SHAI_TOKEN.network}`),
+          h("p.mono.small", null, SHAI_TOKEN.mint),
+          h("a.link", { href: SOLANA.explorerAddress(SHAI_TOKEN.mint), target: "_blank", rel: "noopener" }, "Открыть в Solana Explorer ↗"),
+          h("p.muted", null, "Монеты $SHAI в игре — игровые и с токеном не связаны: в этой версии ввод и вывод токена выключены."),
+          h("p.note", null, SHAI_TOKEN.disclaimer),
+        ),
+        h("h4", null, "История"),
+        d.wallet.records.length
+          ? h(
+              "div.board",
+              null,
+              d.wallet.records.slice(0, 10).map((r) =>
+                h(
+                  "div.board-row",
+                  null,
+                  h("span.board-rank", null, r.kind === "nft-mint" ? "🏅" : "🎓"),
+                  h("span.board-name", null, r.note, h("small", null, new Date(r.at).toLocaleString("ru-RU"))),
+                  r.signature ? h("a.link", { href: SOLANA.explorerTx(r.signature), target: "_blank", rel: "noopener" }, "↗") : "",
+                ),
               ),
-            ),
-          )
-        : h("p.muted", null, "Пока пусто — здесь появятся привязка профиля и сминченные значки."),
+            )
+          : h("p.muted", null, "Пока пусто — здесь появятся выпущенные значки и привязка профиля."),
+      ),
     );
   };
 

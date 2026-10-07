@@ -9,7 +9,7 @@ import { PLAYABLE_ROOMS, ROOMS } from "../../meta/rooms";
 import { UPGRADES } from "../../meta/upgrades";
 import { roomThumb } from "../../render/rooms";
 import type { App, Screen } from "../app";
-import { bar, button, rarityBadge, toast } from "../components/common";
+import { bar, button, rarityBadge, screenIntro, toast } from "../components/common";
 import { hub } from "../components/shell";
 import { fmt, h } from "../dom";
 
@@ -30,6 +30,7 @@ export function workshopScreen(app: App, params: Record<string, unknown>): Scree
     const d = app.store.data;
     const s = app.store;
     shell.body.innerHTML = "";
+    shell.body.appendChild(screenIntro("🛠️", "Мастерская", `Здесь тратятся заработанные в раундах $SHAI (у вас ${fmt(d.shai)}) и материалы: улучшения облегчают раунды, украшения меняют вид кампуса.`));
     const tabs: [Tab, string][] = [
       ["upgrades", "Улучшения"],
       ["shop", "Магазин"],
@@ -47,7 +48,7 @@ export function workshopScreen(app: App, params: Record<string, unknown>): Scree
     shell.body.appendChild(wrap);
 
     if (tab === "upgrades") {
-      wrap.appendChild(h("p.muted", null, "Постоянные улучшения за $SHAI, заработанные игрой. Первые доступны после 2–3 раундов."));
+      wrap.appendChild(h("p.muted", null, "Постоянные улучшения действуют в каждом раунде. На первое хватит после 2–3 раундов."));
       for (const u of UPGRADES) {
         const lvl = d.upgrades[u.id];
         const maxed = lvl >= u.maxLevel;
@@ -184,7 +185,7 @@ export function workshopScreen(app: App, params: Record<string, unknown>): Scree
               h("b", null, c.name),
               rarityBadge(c.rarity),
               h("small.muted", null, owned ? c.desc : sourceLabel(c)),
-              c.onchain ? h("small.nft", { title: "Предмет спроектирован для будущего NFT (см. README)" }, "◎ NFT-ready") : null,
+              c.onchain ? h("small.nft", { title: "Предмет спроектирован под будущий NFT" }, "◎ NFT-ready") : null,
               owned
                 ? equipped
                   ? h("span.chip.done", null, "Надето")

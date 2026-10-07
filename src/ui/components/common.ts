@@ -36,6 +36,11 @@ export function chip(text: string, cls = ""): HTMLElement {
   return h(`span.chip${cls ? `.${cls}` : ""}`, null, text);
 }
 
+/** One-line "what is this screen" header shared by every hub screen. */
+export function screenIntro(icon: string, title: string, text: string): HTMLElement {
+  return h("div.screen-intro", null, h("span.si-icon", { "aria-hidden": "true" }, icon), h("div", null, h("h2", null, title), h("p", null, text)));
+}
+
 export function sectionTitle(text: string, sub?: string): HTMLElement {
   return h("div.section-title", null, h("h2", null, text), sub ? h("p.muted", null, sub) : null);
 }

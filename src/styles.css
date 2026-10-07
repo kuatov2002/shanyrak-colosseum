@@ -585,3 +585,63 @@ canvas.world { touch-action: none; }
 .status-chip.st-success { color: var(--green); }
 .status-chip.st-error { color: #ff9d9d; }
 .status-chip.st-checking, .status-chip.st-awaiting-wallet, .status-chip.st-sending { color: var(--gold-2); animation: pulse 1s infinite; }
+
+/* ── Onboarding & plain-language help (UX pass) ───────────────────── */
+.screen-intro { display: flex; gap: 12px; align-items: flex-start; background: var(--panel); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 10px 14px; margin: 4px 0 12px; }
+.screen-intro .si-icon { font-size: 26px; line-height: 1; padding-top: 2px; }
+.screen-intro h2 { margin: 0 0 2px; font-size: 17px; color: var(--gold-2); }
+.screen-intro p { margin: 0; color: var(--cream); font-size: 13.5px; line-height: 1.4; }
+.home-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.help-chip { background: rgba(0, 175, 202, 0.16); border: 1px solid rgba(0, 175, 202, 0.5); color: var(--cream); border-radius: 999px; padding: 7px 12px; font: 700 13px var(--font); cursor: pointer; white-space: nowrap; }
+.home-tagline { margin: 10px 0 0; color: var(--cream); font-size: 14px; max-width: 420px; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+.play-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1.1; }
+.play-btn .pb-main { font-size: 24px; }
+.play-btn .pb-sub { font-size: 12px; font-weight: 600; opacity: 0.8; letter-spacing: 0; }
+.next-step { display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, rgba(79, 208, 138, 0.16), var(--panel)); border: 1px solid rgba(79, 208, 138, 0.45); border-radius: 14px; padding: 8px 10px; margin-bottom: 8px; }
+.next-step .ns-icon { font-size: 24px; }
+.next-step .ns-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.next-step .ns-text small { color: var(--green); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+.next-step .ns-text b { font-size: 13.5px; font-weight: 600; }
+.next-step .btn { padding: 8px 12px; font-size: 13px; white-space: nowrap; }
+.pill .pill-label { font-size: 11px; color: var(--muted); font-weight: 600; }
+button.net-dot { background: none; border: none; cursor: pointer; font-family: var(--font); padding: 4px; }
+@media (max-width: 520px) {
+  .pill .pill-label { display: none; }
+  .home-tagline { font-size: 13px; }
+}
+.guide-modal { max-width: 560px; }
+.guide-lead { margin: 0 0 6px; color: var(--cream); }
+.guide-h { margin: 12px 0 6px; color: var(--gold-2); font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; }
+.guide-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.guide-list li { display: flex; gap: 10px; align-items: flex-start; }
+.guide-list .gl-icon { font-size: 20px; width: 28px; text-align: center; flex: none; line-height: 1.3; }
+.guide-list li > span:last-child { display: flex; flex-direction: column; gap: 1px; }
+.guide-list b { font-size: 14px; }
+.guide-list small { color: var(--muted); font-size: 13px; line-height: 1.35; }
+.guide-actions { margin-top: 14px; }
+.info-modal p { margin: 0 0 8px; color: var(--cream); line-height: 1.45; }
+
+/* Wallet: three numbered steps, details folded away */
+.wallet-steps { display: flex; flex-direction: column; gap: 10px; }
+.wallet-step { display: flex; gap: 12px; align-items: flex-start; background: var(--panel); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 12px 14px; }
+.wallet-step.done { border-color: rgba(79, 208, 138, 0.5); }
+.wallet-step .ws-num { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: rgba(0, 175, 202, 0.2); border: 1px solid rgba(0, 175, 202, 0.6); color: var(--cream); }
+.wallet-step.done .ws-num { background: rgba(79, 208, 138, 0.25); border-color: var(--green); }
+.wallet-step .ws-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.wallet-step .ws-body > b { font-size: 15px; }
+.wallet-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.wallet-options .wallet-option { flex: 1 1 140px; }
+.wallet-details { margin: 14px 0 24px; background: var(--panel); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 10px 14px; }
+.wallet-details summary { cursor: pointer; font-weight: 700; color: var(--cream); }
+.wallet-details[open] summary { margin-bottom: 8px; }
+@media (max-width: 520px) {
+  .home-top { flex-wrap: wrap; }
+  .home-chips { flex-direction: row; width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .next-step .ns-text b { font-size: 13px; }
+}
+.wallet-step .ws-body p, .wallet-step .ws-body small { margin: 0; font-size: 13px; line-height: 1.4; }
+.wallet-step .ws-body .note { padding: 6px 10px; }
+.wallet-step .grid-cards.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .wallet-step .grid-cards.badges { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wallet-step .badge-img.small { width: 72px; height: 72px; } }
+.wallet-step .item-card small { font-size: 11.5px; }
+.wallet-step .item-card b { font-size: 14px; line-height: 1.2; }

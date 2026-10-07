@@ -1,5 +1,6 @@
 // Round result: what you built, what you earned, what moved forward — then "again" in one tap.
-// After the very first result the (optional) wallet invitation appears here, never earlier.
+// The optional Solana invitation appears only after a few real rounds (never after the tutorial),
+// or when a new badge-eligible achievement was just earned.
 
 import { MODES, MISSIONS } from "../../gameplay/modes";
 import { applyMetrics, WEEKLY_QUESTS } from "../../retention/quests";
@@ -26,8 +27,7 @@ export function resultScreen(app: App): Screen {
   }
   const r = sum.result;
   const d = app.store.data;
-  const firstResult = !d.firstResultSeen;
-  if (firstResult) app.store.mutate((s) => (s.firstResultSeen = true));
+  if (!d.firstResultSeen) app.store.mutate((s) => (s.firstResultSeen = true));
 
   const title =
     r.mode === "tutorial"
@@ -86,28 +86,29 @@ export function resultScreen(app: App): Screen {
     });
   }
 
+  const newBadge = sum.achievements.some((a) => MINTABLE_IDS.includes(a.id));
   const walletCard =
-    firstResult || (!d.walletPromptDismissed && !app.wallet.address && d.stats.rounds <= 3)
+    r.mode !== "tutorial" && !d.walletPromptDismissed && !app.wallet.address && d.stats.rounds >= 3 && d.stats.rounds <= 6
       ? h(
           "div.wallet-invite",
           null,
           h("b", null, "◎ Solana — по желанию"),
-          h("p", null, "Привяжите Solana-кошелёк к профилю (бесплатная подпись) и, если захотите, сминтите значок-NFT за достижение. Рейтинги и прогресс работают и без кошелька."),
+          h("p", null, "Кошелёк для игры не нужен. С ним можно выпустить значок-NFT за достижение — он останется у вас навсегда."),
           h(
             "div.row",
             null,
-            button("Подключить кошелёк", () => app.router.go("wallet"), { kind: "primary" }),
+            button("Узнать больше", () => app.router.go("wallet"), { kind: "primary" }),
             button("Не сейчас", () => {
               app.store.mutate((s) => (s.walletPromptDismissed = true));
               (document.querySelector(".wallet-invite") as HTMLElement | null)?.remove();
             }, { kind: "ghost" }),
           ),
         )
-      : sum.achievements.some((a) => MINTABLE_IDS.includes(a.id))
+      : newBadge && r.mode !== "tutorial"
         ? h(
             "div.wallet-invite.small",
             null,
-            h("span", null, "🏅 Новое достижение можно сминтить значком-NFT (по желанию)"),
+            h("span", null, "🏅 За это достижение можно выпустить значок-NFT (по желанию)"),
             button("Открыть", () => app.router.go("wallet"), { kind: "primary" }),
           )
         : null;

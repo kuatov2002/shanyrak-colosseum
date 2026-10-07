@@ -13,11 +13,16 @@
     <style>
       html, body { margin: 0; height: 100%; background: #141833; }
       #boot { position: fixed; inset: 0; display: grid; place-items: center; color: #f2b84b; font: 700 20px system-ui, sans-serif; letter-spacing: 0.2em; }
+      #boot .boot-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+      #boot .boot-ring { width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(242, 184, 75, 0.25); border-top-color: #f2b84b; animation: boot-spin 0.9s linear infinite; }
+      #boot small { color: #b9b0cf; font: 500 13px system-ui, sans-serif; letter-spacing: 0.05em; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { #boot .boot-ring { animation-duration: 3s; } }
     </style>
   </head>
   <body>
     <div id="app"></div>
-    <div id="boot">ШАНЫРАК</div>
+    <div id="boot" role="status"><div class="boot-inner"><div class="boot-ring" aria-hidden="true"></div><span>ШАНЫРАК</span><small>Загружаем кампус…</small></div></div>
     <noscript>Для игры нужен JavaScript.</noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>

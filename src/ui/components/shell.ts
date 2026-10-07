@@ -7,6 +7,7 @@ import { FACULTIES } from "../../social/faculties";
 import { shortAddress } from "../../social/leaderboards";
 import type { App, ScreenId } from "../app";
 import { fmt, h } from "../dom";
+import { openInfo } from "./guide";
 
 export const AVATARS = ["🦅", "🐎", "🐆", "🦉", "🐺", "🦌"];
 
@@ -43,12 +44,27 @@ export function topBar(app: App): HTMLElement {
       "div.topbar-right",
       null,
       h(
-        "span.net-dot",
-        { title: online === "online" ? "Онлайн: iDos Games" : online === "connecting" ? "Подключение…" : "Оффлайн: всё сохраняется локально", class: `net-${online}` },
+        "button.net-dot",
+        {
+          type: "button",
+          onclick: () => openInfo(app, "online"),
+          title: online === "online" ? "Онлайн: iDos Games" : online === "connecting" ? "Подключение…" : "Оффлайн: всё сохраняется локально",
+          class: `net-${online}`,
+        },
         online === "online" ? "онлайн" : online === "connecting" ? "…" : "оффлайн",
       ),
-      h("span.pill.pill-shai", { title: "$SHAI — игровая валюта" }, h("i", null, "🪙"), fmt(d.shai)),
-      h("span.pill.pill-mats", { title: "Материалы: кирпич, войлок, нить" }, `🧱${d.materials.brick} 🟫${d.materials.felt} 🧵${d.materials.thread}`),
+      h(
+        "button.pill.pill-shai",
+        { type: "button", onclick: () => openInfo(app, "shai"), title: "$SHAI — игровые монеты. Нажмите, чтобы узнать больше", "aria-label": `$SHAI: ${fmt(d.shai)}. Что это?` },
+        h("i", null, "🪙"),
+        fmt(d.shai),
+        h("small.pill-label", null, "$SHAI"),
+      ),
+      h(
+        "button.pill.pill-mats",
+        { type: "button", onclick: () => openInfo(app, "materials"), title: "Материалы для крафта. Нажмите, чтобы узнать больше", "aria-label": `Материалы: кирпич ${d.materials.brick}, войлок ${d.materials.felt}, нить ${d.materials.thread}. Что это?` },
+        `🧱${d.materials.brick} 🟫${d.materials.felt} 🧵${d.materials.thread}`,
+      ),
       h(
         "button.pill.pill-wallet",
         { type: "button", onclick: () => app.router.go("wallet"), title: "Solana-кошелёк (необязательно)" },

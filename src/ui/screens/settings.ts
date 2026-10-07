@@ -87,7 +87,7 @@ export function settingsScreen(app: App): Screen {
         null,
         h("p", null, h("b", null, "Шанырак: Кампус-Башня"), " · v0.1 · iDos Games × Solana Superteam Kazakhstan"),
         h("p.muted", null, `Тайтл iDos: ${app.backend().titleId ?? "оффлайн"} · Состояние: ${app.store.session.online}${app.store.session.onlineError ? ` (${app.store.session.onlineError})` : ""}`),
-        h("p.muted", null, "Сохранение: локально на устройстве (версия сохранений 2). Шанырак в игре — символ завершения и общности."),
+        h("p.muted", null, "Сохранение: локально на устройстве (версия сохранений 3). Шанырак в игре — символ завершения и общности."),
       ),
     );
   };

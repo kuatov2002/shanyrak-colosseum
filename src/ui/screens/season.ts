@@ -3,7 +3,7 @@
 import { SEASON_PREMIUM_PRICE, buySeasonPremium } from "../../economy/shop";
 import { claimSeason, SEASON, SEASON_TIERS, seasonTier } from "../../retention/season";
 import type { App, Screen } from "../app";
-import { bar, button, toast } from "../components/common";
+import { bar, button, screenIntro, toast } from "../components/common";
 import { hub } from "../components/shell";
 import { fmt, h } from "../dom";
 
@@ -16,6 +16,7 @@ export function seasonScreen(app: App): Screen {
     const daysLeft = Math.max(0, Math.ceil((new Date(SEASON.ends).getTime() - Date.now()) / 86400000));
     shell.body.innerHTML = "";
     shell.body.append(
+      screenIntro("⭐", "Сезон", "Каждый раунд даёт очки сезона, а новые уровни открывают награды. Платной силы нет: абонемент покупается только за игровые $SHAI."),
       h(
         "div.season-head",
         null,
@@ -42,7 +43,7 @@ export function seasonScreen(app: App): Screen {
               }
             }, { kind: d.shai >= SEASON_PREMIUM_PRICE ? "gold" : "ghost", disabled: d.shai < SEASON_PREMIUM_PRICE }),
           ),
-      h("p.muted", null, "Очки сезона: высота и «Идеально» в раундах, коворкинги, инновации и задания."),
+      h("p.muted", null, "Откуда очки сезона: высота башни и «Идеально» в раундах, коворкинги, инновации и задания. Награду уровня забирайте кнопкой на его строке."),
     );
     const ladder = h("div.season-ladder");
     for (const row of SEASON_TIERS) {
