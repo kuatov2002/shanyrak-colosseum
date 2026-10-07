@@ -6,6 +6,7 @@ import {
   Application,
   BitmapFont,
   BitmapText,
+  BlurFilter,
   Container,
   Graphics,
   ParticleContainer,
@@ -15,6 +16,7 @@ import {
   TilingSprite,
   UPDATE_PRIORITY,
 } from "pixi.js";
+import { DropShadowFilter, GlowFilter, ZoomBlurFilter } from "pixi-filters";
 import { BALANCE } from "../config/balance";
 import { CROWN_DURATION } from "../gameplay/round";
 import type { Tower } from "../gameplay/tower";
@@ -27,6 +29,10 @@ import { BlockView, type BlockLook } from "./blockView";
 import { clamp01, easeOutBack, hexToRgb, mix, shade } from "./color";
 import { themeFor, type Theme } from "./sky";
 import { TextureBank } from "./textures";
+import { createWarmGrade, type Grade } from "./warmGrade";
+import { FONT_CHARS } from "./hud/fonts";
+import { Hud } from "./hud/hud";
+import { buildSkin, type Skin } from "../design/skin";
 
 export interface WorldView {
   t: number;
@@ -63,14 +69,6 @@ const H = BALANCE.world.blockH;
 export const FLOAT_FONT = "ShFloat";
 const EMOJI = /[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu;
 
-export const FONT_CHARS = [
-  ["a", "z"],
-  ["A", "Z"],
-  ["0", "9"],
-  ["А", "я"],
-  "ЁёҚқҒғҮүҰұӘәҢңӨөІіҺһ",
-  " !?.,:;+-–—×%«»()/$№*'\"…#↑→←☆★·",
-];
 
 function hex(c: string): number {
   const [r, g, b] = hexToRgb(c);
@@ -117,7 +115,11 @@ export class PixiRenderer {
   readonly world = new Container();
   readonly screenFx = new Container();
   readonly overlay = new Container();
-  readonly hud = new Container();
+  readonly hudLayer = new Container();
+  skin!: Skin;
+  hudUi!: Hud;
+  /** Tap on the game field (not on a HUD control). */
+  onTap: (() => void) | null = null;
   private sky!: { tex: Texture; paint(top: string, bottom: string): void };
   private skySprite!: Sprite;
   private stars!: ParticleContainer;
@@ -151,6 +153,17 @@ export class PixiRenderer {
   private vignette!: Sprite;
   private danger!: Sprite;
   private flashSprite!: Sprite;
+  private fog!: Sprite;
+  private fg!: TilingSprite;
+  private towerShadow = new DropShadowFilter({ offset: { x: 5, y: 6 }, blur: 3, alpha: 0.32, color: 0x0a0618, quality: 3 });
+  private towerGlow = new GlowFilter({ distance: 14, outerStrength: 2, innerStrength: 0, color: 0xffc94d, quality: 0.15 });
+  private crownGlow = new GlowFilter({ distance: 16, outerStrength: 2, innerStrength: 0.4, color: 0xffe9a8, quality: 0.2 });
+  private zoom = new ZoomBlurFilter({ strength: 0, innerRadius: 60 });
+  private zoomT = 0;
+  private trail: { x: number; y: number }[] = [];
+  private leavesT = 0;
+  private crownHalo!: Sprite;
+  private grade!: Grade;
 
   private blocks = new Map<number, BlockView>();
   private hangingView: { key: string; view: BlockView } | null = null;
@@ -295,8 +308,22 @@ export class PixiRenderer {
     this.rays.visible = false;
     this.crownLayer.addChild(this.rays);
 
+    this.mtn.filters = [new BlurFilter({ strength: 1.4, quality: 2 })];
+    this.fog = new Sprite(b.fog());
+    this.fog.anchor.set(0.5, 0.5);
+    this.fog.filters = [new BlurFilter({ strength: 6, quality: 2 })];
+    this.fg = new TilingSprite({ texture: b.foregroundTile(), width: 10, height: 90 });
+    this.crownHalo = new Sprite(b.softDot());
+    this.crownHalo.anchor.set(0.5);
+    this.crownHalo.blendMode = "add";
+    this.crownHalo.tint = 0xffe9a8;
+    this.crownLayer.addChild(this.crownHalo);
+    this.crownLayer.filters = [this.crownGlow];
+    this.towerLayer.filters = [this.towerShadow];
+    this.grade = createWarmGrade();
+    this.world.filters = [this.grade.filter];
     this.particles = new Particles(b.particles());
-    this.world.addChild(this.groundWorld, this.aura, this.towerLayer, this.movingLayer, this.crownLayer, this.particles.worldNormal, this.particles.worldAdd, this.floatLayer);
+    this.world.addChild(this.groundWorld, this.aura, this.towerLayer, this.fog, this.movingLayer, this.crownLayer, this.particles.worldNormal, this.particles.worldAdd, this.floatLayer);
     this.screenFx.addChild(this.crane, this.particles.screen, this.particles.screenAdd);
 
     this.vignette = new Sprite(b.vignette());
@@ -309,7 +336,16 @@ export class PixiRenderer {
     this.flashSprite.alpha = 0;
     this.overlay.addChild(this.vignette, this.danger, this.flashSprite);
 
-    this.app.stage.addChild(this.bg, this.world, this.screenFx, this.overlay, this.hud);
+    this.skin = buildSkin();
+    this.hudUi = new Hud(this.skin, this.bank);
+    this.hudLayer.addChild(this.hudUi);
+    this.app.stage.addChild(this.bg, this.world, this.fg, this.screenFx, this.overlay, this.hudLayer);
+    this.app.stage.eventMode = "static";
+    this.app.stage.hitArea = this.app.screen;
+    this.app.stage.on("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      this.onTap?.();
+    });
   }
 
   private moonTexture(): Texture {
@@ -346,7 +382,7 @@ export class PixiRenderer {
     this.bank.scale = Math.max(1.5, Math.min(3, Math.round(this.scale * dpr * 2) / 2));
     this.skySprite.width = w;
     this.skySprite.height = h;
-    for (const ts of [this.mtn, this.hills, this.detail, this.lights]) ts.width = w;
+    for (const ts of [this.mtn, this.hills, this.detail, this.lights, this.fg]) ts.width = w;
     for (const s of [this.vignette, this.danger]) {
       s.width = w;
       s.height = h;
@@ -354,6 +390,7 @@ export class PixiRenderer {
     this.flashSprite.width = w;
     this.flashSprite.height = h;
     this.lookKey = ""; // rebuild block views at the new bake scale
+    this.hudUi.layout(w, h);
   }
 
   get groundY(): number {
@@ -393,6 +430,14 @@ export class PixiRenderer {
     }
   }
 
+  /** Short radial zoom-blur burst over the world (combo milestones, Shabyt, crown). */
+  private flashZoom(strength: number): void {
+    if (this.opts.reducedMotion) return;
+    this.zoomT = 0.3;
+    this.zoom.strength = strength;
+    this.world.filters = [this.grade.filter, this.zoom];
+  }
+
   private onEvent(e: RoundEvent, cos: Equipped): void {
     const p = this.particles;
     switch (e.k) {
@@ -418,9 +463,11 @@ export class PixiRenderer {
         p.burst("dust", e.x, e.y, 14, { speed: 120, size: 10, color: "#bfae8f", g: 10, life: 1 });
         break;
       case "combo":
+        this.flashZoom(0.12);
         p.burst("star", this.view ? this.view.crane.x : 0, (this.view?.tower.topY ?? 0) + 40, 22, { speed: 300, size: 7, colors: ["#ffd75e", "#fff3c4"], g: -120, life: 1.2 });
         break;
       case "shabyt":
+        if (e.on) this.flashZoom(0.16);
         if (e.on && this.view) p.burst("glow", this.view.crane.x, this.view.tower.topY, 30, { speed: 260, size: 6, color: "#ffd75e", g: 0, life: 1.2 });
         break;
       case "material":
@@ -434,6 +481,7 @@ export class PixiRenderer {
         }
         break;
       case "crowned":
+        this.flashZoom(0.2);
         if (this.view) {
           const top = this.view.tower.top;
           const x = this.view.tower.visualX(top);
@@ -464,6 +512,7 @@ export class PixiRenderer {
     this.time += dt;
     this.particles.reduced = this.opts.reducedMotion;
     this.particles.update(dt);
+    this.hudUi.update(dt);
     const v = this.view;
     if (!v) return;
     this.focusCur += (this.focus - this.focusCur) * Math.min(1, dt * 3);
@@ -513,9 +562,23 @@ export class PixiRenderer {
       if (v.event?.id === "festival") {
         this.particles.spawn({ kind: "confetti", x: (Math.random() - 0.5) * 500, y: 160 + Math.random() * 120, vx: (Math.random() - 0.5) * 60, vy: 0, life: 2.4, size: 6, color: ["#c0392b", "#2aa79a", "#f2b84b", "#ff9ad5"][Math.floor(Math.random() * 4)], g: -120, vr: 5, drag: 0.8 });
       }
+      for (const b of v.tower.blocks) {
+        if (b.type !== "nauryz") continue;
+        const sy = this.screenY(b.floor * H + H);
+        if (sy < -40 || sy > this.cssH + 40) continue;
+        const x = v.tower.visualX(b) + b.w * 0.32;
+        for (let i = 0; i < 2; i++) this.particles.spawn({ kind: "fire", x: x + (Math.random() - 0.5) * 6, y: (b.floor + 1) * H + 2, vx: (Math.random() - 0.5) * 14 + v.wind * v.windDir * 30, vy: 40 + Math.random() * 30, life: 0.7, size: 4, color: ["#ffb347", "#ff6b3c", "#ffd75e"][i], g: 20, drag: 0.6 });
+      }
       if (v.event?.id === "nauryz" && Math.random() < 0.12) this.fireworkQueue.push({ at: this.time, x: (Math.random() - 0.5) * 600, y: topY + 200 + Math.random() * 150 });
     }
     const rate = this.opts.reducedMotion ? 0.35 : 1;
+    this.leavesT += dt;
+    const leafEvery = v.wind > 0.05 ? 0.12 : 0.9;
+    if (!this.opts.menu && this.leavesT > leafEvery / rate) {
+      this.leavesT = 0;
+      const dir = v.wind > 0.05 ? v.windDir : Math.random() < 0.5 ? 1 : -1;
+      this.particles.spawn({ kind: "leaf", x: dir > 0 ? -20 : this.cssW + 20, y: this.cssH * (0.25 + Math.random() * 0.5), vx: dir * (60 + v.wind * 260 + Math.random() * 40), vy: 20 + Math.random() * 30, life: 7, size: 5, color: ["#7fb85a", "#e0a63a", "#c8643b", "#a9d46a"][Math.floor(Math.random() * 4)], g: 12, vr: (Math.random() - 0.5) * 4, drag: 0.1, screen: true });
+    }
     if (v.wind > 0.05 && Math.random() < v.wind * 0.9 * rate) {
       const fromLeft = v.windDir > 0;
       this.particles.spawn({ kind: "wind", x: fromLeft ? -40 : this.cssW + 40, y: Math.random() * this.cssH * 0.8, vx: v.windDir * (500 + Math.random() * 300), vy: 0, life: 1.6, size: 1, color: "#e8f4ff", screen: true, rot: 0 });
@@ -618,6 +681,36 @@ export class PixiRenderer {
     this.grass.height = Math.max(0, hgt - gy) + 20;
     this.grass.tint = hex(shade("#4f8f58", -th.lights * 0.45));
     this.grass.visible = gy < hgt + 10;
+
+    // Foreground grass in front of the campus, fog at the foot of the tower
+    const fgScale = Math.max(0.6, s) * 0.7;
+    this.fg.tileScale.set(fgScale, fgScale);
+    this.fg.height = Math.floor(90 * fgScale) - 2;
+    this.fg.y = gy + 20 * s;
+    this.fg.tilePosition.x = -this.camX * s * 1.2;
+    this.fg.tint = hex(shade("#ffffff", -th.lights * 0.5));
+    this.fg.visible = this.fg.y < hgt;
+    this.fog.position.set(0, -8);
+    this.fog.width = 1100;
+    this.fog.height = 70;
+    this.fog.alpha = 0.18 + th.lights * 0.22 + (v.cfg.weather === "rain" && !this.opts.menu ? 0.15 : 0);
+    this.fog.tint = hex(mix("#ffffff", th.bottom, 0.4));
+    // Custom warm-night colour grade (own GLSL filter)
+    this.grade.set(Math.min(1, th.lights), 0.6 + th.lights * 0.6);
+    // Shabyt: the whole tower glows
+    const glowOn = v.shabytLevel > 0 && !this.opts.menu;
+    this.towerLayer.filters = glowOn ? [this.towerShadow, this.towerGlow] : [this.towerShadow];
+    if (glowOn) this.towerGlow.outerStrength = (v.shabytLevel === 2 ? 2.6 : 1.8) + Math.sin(this.time * 5) * 0.8;
+    // Zoom-blur burst decays to nothing, then the filter is removed (zero cost when idle)
+    if (this.zoomT > 0) {
+      this.zoomT -= dt;
+      this.zoom.strength *= 0.85;
+      if (v.tower.blocks.length) {
+        const [zx, zy] = this.toScreen(v.tower.visualX(v.tower.top), v.tower.topY);
+        this.zoom.center = { x: zx, y: zy };
+      }
+      if (this.zoomT <= 0) this.world.filters = [this.grade.filter];
+    }
 
     // Camera transform for the world
     this.world.position.set(this.screenX(0) + ox, this.screenY(0) + oy);
@@ -820,6 +913,14 @@ export class PixiRenderer {
     this.rays.height = W * 2.6;
     this.rays.rotation += dt * 0.15;
     this.rays.alpha = 0.55 * glow;
+    this.crownHalo.visible = glow > 0;
+    this.crownHalo.position.set(x, -(y + W * 0.34));
+    this.crownHalo.width = W * 0.9;
+    this.crownHalo.height = W * 0.55;
+    this.crownHalo.alpha = glow * (0.45 + 0.2 * Math.sin(this.time * 2.2));
+    this.crownGlow.outerStrength = glow > 0 ? 1.6 + Math.sin(this.time * 2.5) * 0.9 : 0;
+    this.crownGlow.enabled = glow > 0;
+    crownSprite.rotation = glow > 0 ? Math.sin(this.time * 0.8) * 0.012 : 0;
   }
 
   private syncFloats(v: WorldView): void {
@@ -850,13 +951,25 @@ export class PixiRenderer {
   private drawCrane(v: WorldView, ox: number, oy: number): void {
     const g = this.crane;
     g.clear();
-    if (!v.hanging || this.opts.menu) return;
+    if (!v.hanging || this.opts.menu) {
+      this.trail.length = 0;
+      return;
+    }
     const s = this.scale;
     const railY = 18;
     g.rect(0, railY - 8, this.cssW, 8).fill({ color: 0x3a3d55 });
     for (let k = 0; k < this.cssW; k += 40) g.rect(k, railY - 8, 20, 3).fill({ color: 0xf2b84b });
     const [hx, hyTop] = this.toScreen(v.crane.x, v.tower.topY + BALANCE.world.hangAbove + H);
     g.rect(hx - 16 + ox, railY, 32, 12).fill({ color: 0x4a4e6d });
+    // Fading trail of the swinging room
+    const [, hyMid] = this.toScreen(v.crane.x, v.tower.topY + BALANCE.world.hangAbove + H / 2);
+    this.trail.push({ x: hx, y: hyMid });
+    if (this.trail.length > 18) this.trail.shift();
+    for (let i = 1; i < this.trail.length; i++) {
+      const a = this.trail[i - 1];
+      const c = this.trail[i];
+      g.moveTo(a.x + ox, a.y + oy).lineTo(c.x + ox, c.y + oy).stroke({ width: 3 * s, color: 0xffe9a8, alpha: (i / this.trail.length) * 0.35 });
+    }
     g.moveTo(hx + ox, railY + 12)
       .lineTo(hx + Math.sin(v.crane.tilt) * 20 * s + ox, hyTop + oy - 12 * s)
       .stroke({ width: 2, color: 0x2b2d40 });

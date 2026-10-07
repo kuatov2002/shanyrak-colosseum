@@ -6,6 +6,7 @@ import type { RoomId } from "../meta/rooms";
 import type { FacultyId } from "../social/faculties";
 import { windowLayout, type WindowRect } from "./rooms";
 import { BLOCK_H, type TextureBank } from "./textures";
+import { decorateRoom } from "./roomExtras";
 
 export interface BlockLook {
   facade: string;
@@ -27,6 +28,9 @@ export class BlockView extends Container {
   private crackSprite: Sprite | null = null;
   private windows: WindowView[] = [];
   readonly extras = new Container();
+  /** Layer between the base and the windows (wall ornament, interior glow). */
+  readonly wall = new Container();
+  readonly windowRects: WindowRect[];
   private shownStudents = 0;
   /** Extras updaters registered by decorators (render/roomExtras.ts). */
   readonly tickers: ((t: number, night: number) => void)[] = [];
@@ -47,7 +51,8 @@ export class BlockView extends Container {
     const lights = new Container();
     const people = new Container();
     const cyan = type === "itlab";
-    for (const rect of windowLayout(type, w, BLOCK_H)) {
+    this.windowRects = windowLayout(type, w, BLOCK_H);
+    for (const rect of this.windowRects) {
       const wl = bank.windowLight(rect.w, rect.h);
       const light = new Sprite(wl.tex);
       light.anchor.set(wl.ax, wl.ay);
@@ -69,7 +74,8 @@ export class BlockView extends Container {
       const frac = rnd - Math.floor(rnd);
       this.windows.push({ rect, light, phase: frac * Math.PI * 2, nightOnly: frac < 0.18, students });
     }
-    this.addChild(lights, people, this.extras);
+    this.addChild(this.wall, lights, people, this.extras);
+    decorateRoom(this, bank, type);
   }
 
   /**

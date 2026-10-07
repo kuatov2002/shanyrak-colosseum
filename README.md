@@ -24,7 +24,7 @@ npm run build      # tsc + vite → dist/ (относительные пути, 
 
 Переменные окружения необязательны (см. `.env.example`): `VITE_IDOS_TITLE_ID` (по умолчанию `JE8W0Z54`), `VITE_IDOS_ENV`, `VITE_SOLANA_DEVNET_RPC`, `VITE_SOLANA_MAINNET_RPC`.
 
-Стек: **TypeScript + Vite + Canvas 2D**, интерфейс на DOM без фреймворков. Phaser не понадобился: физика аркадная и своя, так рендер и логику проще держать раздельно. Весь арт и звук процедурные, внешних ассетов нет.
+Стек: **TypeScript + Vite + PixiJS 8 (WebGL)**, меню на DOM без фреймворков. Экран раунда целиком рисует Pixi: мир, HUD, карточки бонусов и частицы. DOM остаётся только для модалок паузы и для live-области скринридера. Физика аркадная и своя, логика отделена от рендера. Весь арт и звук процедурные, внешних ассетов нет: формы один раз запекаются в GPU-текстуры, дальше их компонует, анимирует и фильтрует WebGL.
 
 ## Как играть
 
@@ -137,9 +137,11 @@ src/
   retention/   daily · weekly · season · quests (+ достижения)
   social/      faculties (война) · leaderboards
   platform/    backend (интерфейс + оффлайн) · idos (SDK)
-  solana/      config · wallet · token · actions
-  render/      renderer · rooms · shanyrak · sky · glyphs · color · menuScene
-  visuals/     particles
+  solana/      config · rpc (пул с failover) · wallet · token · nft (Metaplex Core) · nftArt · actions
+  render/      world (PixiJS-рендерер) · blockView · roomExtras · textures (запекание) · warmGrade (свой GLSL-фильтр)
+               hud/ (Pixi HUD: button · hud · fonts) · rooms · shanyrak · sky · glyphs · color · menuScene
+  design/      skin (общая 9-slice дизайн-система для Pixi и CSS border-image) · icons
+  visuals/     particles (ParticleContainer, общий атлас)
   audio/       sound (SFX + генеративная домбра)
   analytics/   events
   ui/          app (роутер) · dom · components/ · screens/ (12 экранов + модальные окна)

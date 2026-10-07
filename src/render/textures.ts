@@ -7,7 +7,7 @@ import { hashString, Rng } from "../core/rng";
 import type { RoomId } from "../meta/rooms";
 import type { FacultyId } from "../social/faculties";
 import { mix, PALETTE, rgba, shade } from "./color";
-import { drawRoom } from "./rooms";
+import { drawOrnamentBand, drawRoom } from "./rooms";
 import { drawCrown } from "./shanyrak";
 
 export const BLOCK_H = BALANCE.world.blockH;
@@ -178,6 +178,17 @@ export class TextureBank {
         ctx.arc(x, hy - s * 0.08, s * 0.37, Math.PI * 1.05, Math.PI * 1.95);
         ctx.fill();
       }
+      return canvasTexture(c, k);
+    });
+  }
+
+  /** Small seamless wall ornament tile (cream, used at low alpha over the walls). */
+  wallOrnament(kind: string): Texture {
+    return this.memo(`wallorn|${kind}`, () => {
+      const k = 2;
+      const [c, ctx] = makeCanvas(36 * k, 30 * k);
+      ctx.scale(k, k);
+      drawOrnamentBand(ctx, kind, 0, 36, 15, 22, "#fff3d6");
       return canvasTexture(c, k);
     });
   }
@@ -437,6 +448,8 @@ export class TextureBank {
         ctx.fill();
       }
       ctx.restore();
+      ctx.clearRect(0, 0, w, 2);
+      ctx.clearRect(0, h - 2, w, 2);
       return canvasTexture(c, 1);
     });
   }
@@ -464,6 +477,8 @@ export class TextureBank {
         ctx.arc(x, y, 3 + rng.next() * 4, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.clearRect(0, 0, w, 2);
+      ctx.clearRect(0, h - 2, w, 2);
       return canvasTexture(c, 1);
     });
   }
@@ -537,6 +552,8 @@ export class TextureBank {
           ctx.fillRect(x, y - 5, 8, 5);
         }
       }
+      ctx.clearRect(0, 0, w, 2);
+      ctx.clearRect(0, h - 2, w, 2);
       return canvasTexture(c, 1);
     });
   }
@@ -556,6 +573,8 @@ export class TextureBank {
         ctx.fillStyle = rng.chance(0.75) ? "rgba(255,210,122,0.95)" : "rgba(255,243,196,0.95)";
         ctx.fillRect(x, y, 2, kind === "bg_city" ? 3 : 2);
       }
+      ctx.clearRect(0, 0, w, 2);
+      ctx.clearRect(0, h - 2, w, 2);
       return canvasTexture(c, 1);
     });
   }
@@ -592,6 +611,7 @@ export class TextureBank {
         ctx.arc(x, h - 10 - rng.next() * 18, 2.2, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.clearRect(0, 0, w, 2);
       return canvasTexture(c, 1);
     });
   }

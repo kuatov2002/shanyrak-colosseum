@@ -59,6 +59,10 @@ export interface GameHandle {
  * Mount the game into a host element. WebGL (PixiJS) starts asynchronously; the handle works right
  * away and forwards to the game once it is ready.
  */
+function osReducedMotion(): boolean {
+  return typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 export function mountGame(root: HTMLElement, opts: MountOptions = {}): GameHandle {
   let inner: GameHandle | null = null;
   let destroyed = false;
@@ -175,11 +179,13 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
 
   store.changed.on(() => {
     router.queueRefresh();
-    renderer.opts.reducedMotion = store.data.settings.reducedMotion;
+    renderer.opts.reducedMotion = store.data.settings.reducedMotion || osReducedMotion();
     renderer.opts.guide = store.data.settings.guide;
     document.body.classList.toggle("reduced-motion", store.data.settings.reducedMotion);
   });
-  renderer.opts.reducedMotion = store.data.settings.reducedMotion;
+  // OS-level "reduce motion" also lowers particles, blur and screen shake.
+  const osReduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  renderer.opts.reducedMotion = store.data.settings.reducedMotion || osReduced;
   renderer.opts.guide = store.data.settings.guide;
   document.body.classList.toggle("reduced-motion", store.data.settings.reducedMotion);
 
@@ -331,10 +337,20 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
     listeners.push([target, type, fn as EventListener]);
   };
 
+  renderer.onTap = () => {
+    if (!app.round || router.current?.id !== "round" || renderer.hudUi.offerOpen || document.querySelector(".modal-backdrop")) return;
+    sound.unlock();
+    app.round.drop();
+  };
+
   listen<KeyboardEvent>(window, "keydown", (e) => {
     const tag = (e.target as HTMLElement | null)?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (router.current?.id !== "round" || !app.round) return;
+    if (!document.querySelector(".modal-backdrop") && renderer.hudUi.handleKey(e.code)) {
+      e.preventDefault();
+      return;
+    }
     if (e.code === "Space" || e.code === "Enter") {
       e.preventDefault();
       if (document.querySelector(".modal-backdrop")) return;
