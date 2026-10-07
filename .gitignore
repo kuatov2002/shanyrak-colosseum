@@ -3,3 +3,4 @@ dist
 *.zip
 .env.local
 .trailer
+.claude
