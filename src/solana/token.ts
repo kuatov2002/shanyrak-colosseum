@@ -3,7 +3,7 @@
 //   VirtualCurrencies.Main_IOU → "Shai (IOU)" — the unbacked in-game reward currency
 // In this build the in-game $SHAI balance is local soft currency. The on-chain token is displayed
 // read-only (mainnet RPC, no transaction); deposits/withdrawals are the job of the iDos blockchain
-// module (client.blockchain) once server-side granting is configured — see README.
+// module (client.blockchain) once server-side granting is configured — see docs/GAME.md.
 
 import { RpcUnavailableError, rpc } from "./rpc";
 
@@ -11,7 +11,7 @@ export const SHAI_TOKEN = {
   symbol: "$SHAI",
   name: "Shai",
   mint: "AQWXMcm2Km4kNz6sd4Ec3gf251DswN7KiGw1Mq3Bidos",
-  /** On-chain mint decimals (verified via getAccountInfo). The iDos network config lists 0 — see KNOWN_ISSUES. */
+  /** On-chain mint decimals (verified via getAccountInfo). The iDos network config lists 0 — see docs/KNOWN_ISSUES.md. */
   decimals: 6,
   network: "Solana mainnet-beta",
   idosCryptoCurrencyId: "Main",

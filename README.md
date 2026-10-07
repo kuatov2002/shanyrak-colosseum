@@ -1,155 +1,162 @@
-# Шанырак: Кампус-Башня
+# ШАНЫРАК — Campus Tower
 
-Аркадная игра про стройку для хакатона **iDos Games × Solana Superteam Kazakhstan**.
-Одной кнопкой вы сбрасываете с крана комнаты студенческого кампуса — общагу, чайхану, библиотеку, IT-лабораторию и другие. Чем ровнее легла комната, тем больше комбо, студентов и $SHAI. Каждый раунд заканчивается тем, что башню венчает **шанырак** — символ завершённого дома и общности.
+[![CI](https://github.com/kuatov2002/shanyrak-colosseum/actions/workflows/ci.yml/badge.svg)](https://github.com/kuatov2002/shanyrak-colosseum/actions/workflows/ci.yml)
+[![Solana](https://img.shields.io/badge/Solana-mainnet-9945FF)](https://solana.com)
+[![Metaplex Core](https://img.shields.io/badge/Metaplex-Core-14F195)](https://developers.metaplex.com/core)
+[![PixiJS](https://img.shields.io/badge/PixiJS-8%20WebGL-E72264)](https://pixijs.com)
+[![iDos Games](https://img.shields.io/badge/built%20on-iDos%20Games-F5C451)](https://idosgames.com/app/JE8W0Z54/)
+[![Hackathon](https://img.shields.io/badge/Colosseum-2026-14F195)](https://colosseum.org)
 
-- Понятно за 3 секунды: одно действие — «нажми, когда комната над башней».
-- Работает без кошелька и без интернета. Solana подключается по желанию и только после первого результата.
-- Бэкенд — тайтл iDos **JE8W0Z54**: гостевой вход, серверные лидерборды и аналитика.
+> A **one-button stacking arcade** about building a Kazakh student campus: drop the dorm, the chaikhana, the library and
+> the IT lab onto a swaying tower, chain perfect drops into combos, survive wind and exam-week deadlines — and crown every
+> round with a **shanyrak**, the yurt's crown and the symbol of home. Solana is **optional and honest**: a player can turn
+> an achievement into a **Metaplex Core** badge in their own wallet, with the exact cost shown before they sign.
+
+[**Play now**](https://je8w0z54.idos.games/) · [Trailer (40 s)](docs/media/trailer.mp4) · [Judges' guide](docs/JUDGES.md) · [Architecture](docs/ARCHITECTURE.md) · [Об игре (RU)](docs/GAME.md) · [Platform page](https://idosgames.com/app/JE8W0Z54/)
 
 ---
 
-## Где поиграть
+![Shanyrak — the crowned campus tower](docs/img/hero.jpg)
 
-- **Live:** https://je8w0z54.idos.games/ (версия 4, `bld62504d16ea814768a11afbd8301ca9fa`)
-- **Страница на iDos:** https://idosgames.com/app/JE8W0Z54/
-- Сборка для iDos делается с версионированным `AssetBase`: `npx vite build --base=<AssetBase из begin_build_upload>`. Тогда метаданные NFT-значков получают постоянные URI.
+---
 
-## Как запустить
+## Submission to the iDos Games × Solana hackathon (Colosseum 2026)
+
+| Name | Role | Contact |
+|------|------|---------|
+| Alikhan Kuatov | Solo developer | [GitHub](https://github.com/kuatov2002) |
+
+---
+
+## Problem and Solution
+
+### 1. Web3 games lose casual players at the wallet wall
+- **Problem:** many on-chain games ask for a wallet, a signature or a deposit before the first second of fun.
+- **Shanyrak:** the game opens straight into a 30-second tutorial. Guest login is silent (iDos device id), and every mode, quest, season tier and leaderboard works **without a wallet**. Solana appears only later, as a choice.
+
+### 2. "Ownership" that is just a row in someone's database
+- **Problem:** achievements live on the developer's server and disappear with it.
+- **Shanyrak:** four achievements can be written into the player's wallet as **standalone Metaplex Core assets**. The player is payer, owner and update authority; the only other signer is a one-time asset keypair generated in the browser and wiped right after. There is **no project key in the bundle** and no collection authority to trust.
+
+### 3. Hidden costs and dark patterns around transactions
+- **Problem:** players sign transactions they don't understand.
+- **Shanyrak:** every mint is **simulated on mainnet first**; the dialog shows the refundable rent deposit, the network fee and the total *before* the wallet opens. No seed phrases, no earnings promises, no pay-to-win. If something fails (no SOL, wallet closed, RPC down) the player gets a plain message and a way back to the game.
+
+### 4. Retention needs a backend that a hackathon team can't build
+- **Problem:** leaderboards, analytics and accounts are months of server work.
+- **Shanyrak:** the whole backend is the **iDos Games** title `JE8W0Z54`: silent guest auth, server leaderboards (daily tower, best height, weekly score, five faculties), analytics events — all configured through the iDos MCP, with an offline fallback.
+
+### 5. Games that could be from anywhere
+- **Shanyrak:** a Kazakh campus — chaikhana next to the dorm, Nauryz fireworks, dombra music, қошқар мүйіз ornaments, Alatau on the horizon. The shanyrak is treated with respect: it never falls, it always **completes** what was built.
+
+---
+
+## Why Solana
+
+- **Cheap enough to be a reward, not a purchase** — a badge costs ≈ **0.00176 SOL**, and ≈ 0.00174 of it is a *refundable* rent deposit; the network fee incl. priority is 0.000016 SOL.
+- **One account per asset** — Metaplex Core `CreateV1` is a single ~190-byte account (≈ 9.3k compute units), no token accounts or metadata programs.
+- **Seconds to confirm** — the badge lands while the player is still on the result screen.
+- **Wallets players already have** — Phantom, Solflare and Backpack via the Wallet Standard, plus iDos wallet ↔ profile linking with a free message signature.
+
+---
+
+## Summary of Features
+
+- **Core loop:** crane swing → drop → five-grade judging (Perfect … Critical) → combo → **Shabyt** at ×5 (score ×1.5, the tower glows) → stability, tilt, collapse, three helmets → the shanyrak crowns the tower.
+- **12 room types** with neighbour synergies, **6 events** (mountain wind, deadline shake, exam, Nauryz, session night, student festival), **10 bonus cards** every 5–8 floors.
+- **5 modes:** quick tower, 8-mission campaign «Семестр», a **daily seeded tower** (same rooms and events for everyone), faculty tower, endless.
+- **Meta:** workshop upgrades, shop & crafting from materials, cosmetics collection, daily/weekly quests, 7-day login streak, 20-tier season pass (premium track for in-game coins only), achievements, weekly **faculty war**.
+- **Onboarding:** auto tutorial, a "how to play" guide, a "what next" hint on the hub, plain explanations behind every currency pill.
+- **Solana mainnet:** wallet connect, iDos profile linking (signMessage), achievement badges as Metaplex Core assets (simulation, priority fee, wallet `signAndSendTransaction`, on-chain confirmation by the asset account), read-only $SHAI balance, an RPC pool with failover and a 200 ms rate limit.
+- **Rendering:** PixiJS 8 WebGL — parallax sky, baked room textures, GLSL colour grade, glow/shadow/zoom-blur filters, particle containers, a Pixi HUD sharing a 9-slice design system with the DOM menus.
+- **Accessible:** keyboard play and dialogs (focus trap, Esc), screen-reader live region, reduced motion/transparency, portrait and landscape phones.
+
+| Round | Bonus cards | Badges |
+|---|---|---|
+| ![Round with combo](docs/img/round.jpg) | ![Bonus choice](docs/img/bonus.jpg) | ![Solana badges](docs/img/badges.jpg) |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Game & UI | TypeScript, Vite 8, PixiJS 8 (WebGL), pixi-filters, DOM menus without a framework |
+| Audio | WebAudio — procedural SFX and a generative dombra loop (no audio files) |
+| Backend | iDos Games (`@idosgames/core` 0.21): guest auth, leaderboards, analytics, wallet ↔ profile link |
+| Blockchain | Solana mainnet-beta, `@solana/web3.js`, Wallet Standard, Metaplex Core `CreateV1` (hand-encoded, Borsh) |
+| Hosting | iDos build hosting (versioned CDN paths keep NFT metadata URIs immutable) |
+| Tests | Vitest — round simulation, determinism, missions, saves, economy, RPC pool, mint flow with fake wallet/RPC |
+
+---
+
+## Architecture
+
+```
+            ┌────────────── browser (static build on the iDos CDN) ──────────────┐
+ player ──► │  DOM menus ──┐                                                       │
+            │              ├─► Round (pure simulation, fixed 120 Hz) ──events──┐   │
+ tap/space ►│  Pixi HUD ───┘                                                    ▼   │
+            │                     PixiRenderer (world, HUD, particles, filters)     │
+            │  Store (versioned local save) ── progression / quests / season        │
+            └───────┬───────────────────────────────┬───────────────────────────────┘
+                    │ @idosgames/core                │ web3.js + Wallet Standard
+                    ▼                                ▼
+          iDos title JE8W0Z54                Solana mainnet-beta
+          guest auth · leaderboards          RPC pool (failover, 200 ms/endpoint)
+          analytics · linkWallet             Metaplex Core badge (player-signed)
+```
+
+The simulation knows nothing about rendering: `Round` holds state and emits events; the renderer and HUD read state and react to events. That is why the whole game can be played by a bot in tests and why the trailer below was rendered frame by frame from real rounds. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## Quick Start
 
 ```bash
+git clone https://github.com/kuatov2002/shanyrak-colosseum.git
+cd shanyrak-colosseum
 npm install
-npm run dev        # http://localhost:5190
-npm test           # 14 тестов: симуляция раундов, детерминизм дня, миссии, сохранения, экономика
-npm run build      # tsc + vite → dist/ (относительные пути, подходит для iDos)
+npm run dev          # http://localhost:5190
+npm test             # 27 tests
+npm run build        # typecheck + production bundle in dist/
 ```
 
-Переменные окружения необязательны (см. `.env.example`): `VITE_IDOS_TITLE_ID` (по умолчанию `JE8W0Z54`), `VITE_IDOS_ENV`, `VITE_SOLANA_RPC` (основной RPC mainnet-beta; резервные endpoint подключаются автоматически).
-
-Стек: **TypeScript + Vite + PixiJS 8 (WebGL)**, меню на DOM без фреймворков. Экран раунда целиком рисует Pixi: мир, HUD, карточки бонусов и частицы. DOM остаётся только для модалок паузы и для live-области скринридера. Физика аркадная и своя, логика отделена от рендера. Весь арт и звук процедурные, внешних ассетов нет: формы один раз запекаются в GPU-текстуры, дальше их компонует, анимирует и фильтрует WebGL.
-
-## Как играть
-
-| Действие | Управление |
-|---|---|
-| Сбросить комнату | клик или тап в любом месте, либо `Пробел`/`Enter` |
-| Пауза | кнопка ⏸, `Esc` или `P` |
-| Завершить башню шаныраком (+25% $SHAI) | кнопка внизу, доступна с 8-го этажа |
-
-**Оценка укладки:** Идеально → Хорошо → Нормально → Плохо → Критично (комната падает, теряется каска ⛑).
-**Комбо:** растёт за идеальные укладки подряд. С ×5 включается **Шабыт**: очки ×1.5, башня светится, чаще падают материалы. С ×10 очки ×2.
-**Устойчивость:** растёт за точность, падает от плохих укладок и крена. На нуле верхние этажи оседают, и шанырак венчает то, что устояло. Три потерянные каски тоже завершают раунд.
-**Первые 6 этажей щадящие:** окно «Идеально» шире, кран качается медленнее, критичная укладка подстраховывается.
-
-### Комнаты (12 типов, `src/meta/rooms.ts`)
-Фундамент, Общага, Чайхана, Библиотека, IT-лаборатория, Коворкинг, Спортзал, Актовый зал, Сад-оранжерея, Столовая, Наурыз-площадь и Факультетский блок. У каждой есть ширина, редкость, бонус и правила соседства. Примеры: чайхана рядом с общагой даёт +5 $SHAI и +3 студента; библиотека добавляет ×1.5 к «Идеально» на двух этажах выше; IT-лаборатория рядом с библиотекой или коворкингом удваивает инновации; сады гасят ветер; спортзал добавляет устойчивость; столовая между общагой и актовым залом запускает «Пир кампуса».
-
-### События (`src/gameplay/events.ts`)
-Ветер с гор, Дедлайн-тряска (успокаивается укладкой «Идеально»), Экзамен (студенты заселяются после него, очки ×2), Наурыз, Ночь перед сессией и Студенческий фестиваль (нужен актовый зал). Небо меняется вместе с высотой: день, закат, ночь. События его подкрашивают: Наурыз, сессия, шторм. Погоду раунда (ясно, дождь, снег) задаёт сид.
-
-### Бонусы на выбор (`src/gameplay/bonuses.ts`)
-На 5, 11, 17, 24, 31 и 38-м этажах (дальше каждые 8) игрок выбирает одну из трёх карт. Всего карт 10: Чайный перерыв, Кран общаги, Укрепление, Магнит студентов, Ветрозащита, Антидедлайн, Двойной балкон, Наурыз-гирлянда, Строительный чай и Дух факультета. Каждая подписана стилем сборки: Устойчивость, Высота, Экономика, Соцбилд, События или Факультет.
-
-### Режимы (`src/gameplay/modes.ts`)
-1. **Быстрая башня**: до падения или до 30 этажей.
-2. **Семестр**: 8 миссий от первого фундамента до финального шанырака, со звёздами и наградами за первое прохождение.
-3. **Ежедневная башня**: один сид на сутки (UTC), одинаковые для всех комнаты и события, отдельный лидерборд и ×1.5 $SHAI за первую попытку дня.
-4. **Башня факультета**: очки идут в недельную войну факультетов.
-5. **Бесконечный шанырак**: без потолка, сложность растёт быстрее, редкие комнаты и материалы выпадают чаще.
-
-Первый запуск сразу открывает **обучение** (5 этажей, около 30 секунд, можно пропустить). Затем игрок выбирает факультет.
+Optional `.env` (see `.env.example`): `VITE_IDOS_TITLE_ID` (default `JE8W0Z54`), `VITE_IDOS_ENV`, `VITE_SOLANA_RPC` (primary mainnet RPC; fallbacks are automatic).
+Badge minting needs the published build: metadata lives at the versioned iDos CDN path of that build (`vite build --base=<AssetBase>`).
 
 ---
 
-## Где ретеншн
+## Status
 
-| Механика | Где в коде | Где в игре |
-|---|---|---|
-| Ежедневные задания (5 + бонус за все) | `src/retention/quests.ts`, `daily.ts` | Задания → Ежедневные |
-| Недельные задания (5) | `src/retention/quests.ts`, `weekly.ts` | Задания → Недельные |
-| Серия входов (3 дня → $SHAI, 5 → редкий орнамент, 7 → Наурыз-площадь или флаг) | `src/retention/daily.ts` | Окно при входе, Задания |
-| Сезонный пропуск: 20 уровней, бесплатная и премиум-ветка за $SHAI | `src/retention/season.ts` | Сезон |
-| Достижения (8) | `src/retention/quests.ts` | Задания → Достижения |
-| Мастерская: 8 улучшений | `src/meta/upgrades.ts`, `economy/shop.ts` | Мастерская → Улучшения |
-| Коллекция: комнаты, орнаменты, фасады, фоны, студенты, флаги, украшения шанырака, эффекты, музыка | `src/meta/collection.ts` | Мастерская → Коллекция |
-| Магазин и крафт | `src/economy/shop.ts`, `crafting.ts` | Мастерская → Магазин / Крафт |
-| Война факультетов с недельным победителем | `src/social/faculties.ts`, `retention/weekly.ts` | Рейтинг → Факультеты |
+**Verified:** all 5 modes and 8 missions played to the crown by a bot on the live build; online iDos leaderboards and analytics; mainnet simulation of the badge mint from the live origin (≈ 9.3k CU, rent 0.00174244 SOL, fee 0.000016 SOL); iDos wallet-link challenge; WebGL context loss & restore; no listener leaks over 10 simulated minutes; JS bundle 479 KB gzip in total (≈ 265 KB before the first frame).
 
-**Экономика ($SHAI):** игрок получает её за заселение, «Идеально», комбо, соседства, события, задания, достижения и ежедневную башню. Тратит на комнаты, косметику, крафт, сезонный абонемент и один ограниченный бустер (каска на раунд). Платить реальными деньгами нигде не нужно, и pay-to-win нет: косметика ничего не даёт в геймплее. Первое улучшение стоит 100 $SHAI и доступно уже после обучения. Редкие комнаты (зал за 400, коворкинг за 600, IT-лаборатория за 900, Наурыз-площадь через крафт) рассчитаны на несколько дней игры. Все цифры собраны в `src/config/balance.ts`.
+**Not verified in this environment:** a real wallet signature after the latest mint fix (the first live attempts timed out — fixed with a fresh blockhash at signing, priority fee and wallet-side sending, see [KNOWN_ISSUES](docs/KNOWN_ISSUES.md)); real phones (emulation only). The full honest post-mortem is in [docs/AUDIT.md](docs/AUDIT.md).
 
 ---
 
-## Где Solana (`src/solana/`) — только mainnet-beta
+## Roadmap
 
-Гостевой режим включён по умолчанию. Кошелёк впервые предлагается **на экране первого результата**, игра им ничего не блокирует. Solana используется ровно для трёх добровольных вещей. **Лидерборды в Solana не пишутся**: они off-chain, на iDos (`client.leaderboard.submitScore`).
-
-| Что | Как реализовано | Статус |
-|---|---|---|
-| Подключение кошелька | Wallet Standard (`@wallet-standard/app`: Phantom, Solflare, Backpack…) + запасные injected-провайдеры, chain `solana:mainnet` | ✅ реально |
-| Привязка кошелька к профилю iDos | `client.auth.linkWallet(address, "solana")` → challenge → `signMessage` в кошельке → hex-подпись → `linkWallet(…, signature)`. Сервер iDos проверяет подпись, транзакции нет | ✅ реально (требует онлайн-входа iDos) |
-| Значки-NFT за 4 достижения | Standalone **Metaplex Core**-ассет (`CreateV1`, без коллекции). Подписывают игрок (payer/owner/update authority) и одноразовая keypair ассета, которая живёт только в памяти браузера. Перед подписью транзакция **симулируется в mainnet**, и игрок видит точный депозит (rent ≈ 0.0016 SOL, возвращается при сжигании) и комиссию (≈ 0.00001 SOL) | ✅ реально; инструкция проверена симуляцией в mainnet |
-| Метаданные NFT | `nft/<id>.json` и `nft/<id>.png` в билде по **версионированному** пути CDN iDos (`…/v/<buildId>/nft/…`): при сборке с `--base=<AssetBase>` URI неизменны для этой версии | ✅ |
-| Токен $SHAI | Mint `AQWXMcm2Km4kNz6sd4Ec3gf251DswN7KiGw1Mq3Bidos` (mainnet, SPL Token, 6 decimals) из конфига тайтла iDos. Баланс читается без индексных RPC-вызовов: mint → ATA → `getParsedAccountInfo` | ✅ только чтение |
-| RPC | Пул `publicnode` → `api.mainnet-beta` → `rpc.extrnode.com`: автоматический failover при ошибке, таймауте, 403/429/5xx и лимит не чаще 1 запроса в 200 мс на endpoint (`src/solana/rpc.ts`) | ✅ |
-| Игровой $SHAI | Локальная мягкая валюта (зеркало `Main_IOU` в iDos) | ⚠️ без моста |
-| Казна проекта | `SOLANA.treasury` = `null`. Ключей казны в бандле нет, переводов в неё нет | ⚠️ заготовка |
-
-Гарантии: игра никогда не просит seed-фразу или приватный ключ, и ключей проекта в бандле нет. Каждое действие запускается только кнопкой игрока и подтверждается в окне кошелька. Реальные SOL тратятся только на минт значка, по явному подтверждению суммы. Если RPC недоступен, кошелёк отказал или не хватает SOL, игрок видит понятное сообщение, кнопку «Повторить» и «Вернуться в игру».
-
-## iDos Games (тайтл JE8W0Z54)
-
-`src/platform/idos.ts` работает через официальный SDK `@idosgames/core@0.21.2`. Используемые методы сверены с `.d.ts` пакета:
-- `createIDosGamesClient({ titleID })`, затем `auth.autoLogin()` и, если нужно, `auth.loginWithDeviceID()` для тихого гостевого входа;
-- `leaderboard.submitScore / getLeaderboard`: доски `daily_tower` (Daily, BestScore), `best_height` (Never, BestScore), `weekly_score` (Weekly, Sum), `faculty_tulpar|barys|burkit|dombyra|zhuldyz` (Weekly, Sum);
-- `user.changeUsername`: имя игрока в таблицах;
-- `analytics.logEvent`: события `round_start`, `round_end`, `bonus_pick`, `perfect_streak`, `tutorial_done`, `wallet_connect`, `onchain_action`, `purchase_soft`, `screen_view`.
-
-Конфиг тайтла (лидерборды и аналитика) записан через iDos MCP. Если iDos недоступен или в Настройках выключено «Онлайн-рейтинги», `LocalBackend` переводит игру в оффлайн. Лидерборды тогда показывают ваш результат среди **подписанных** демо-соперников с объяснением.
-
-**Перенос в iDos-хост.** Игра монтируется в любой контейнер: `mountGame(host, { idosClient })` из `src/game.ts`. `idos/shanyrak/` — шаблон модуля для хоста iDos (`get_host_scaffold`): `EngineScene.mount/activate/suspend/destroy/capture` проксируются в `mountGame`, а уже авторизованный `ctx.client` передаётся внутрь.
+- [x] One-button core loop, 12 rooms, events, bonuses, 5 modes, 8-mission campaign
+- [x] iDos backend: guest auth, 8 leaderboards, analytics, wallet ↔ profile link
+- [x] PixiJS WebGL renderer, Pixi HUD, shared design system, mobile portrait & landscape
+- [x] Metaplex Core achievement badges on mainnet with simulation and honest pricing
+- [x] Onboarding pass: guide, "what next", plain-language wallet screen
+- [ ] Server-side validation of round results and rewards (iDos CloudCode)
+- [ ] Cloud saves (iDos UserCustomData)
+- [ ] Verified badge collection via a serverless collection signer
+- [ ] Faculty tournaments → inter-university leagues; Kazakh and English localisation
 
 ---
 
-## Что работает и что заглушка
+## Resources
 
-**Работает:** весь игровой цикл (кран, падение, оценка, комбо и Шабыт, устойчивость, крен, обрушение, каски, шанырак); 12 комнат с соседствами; 6 событий; 10 бонусов; 5 режимов и 8 миссий; детерминированная ежедневная башня; мета (улучшения, магазин, крафт, коллекция с надеванием косметики); дневные и недельные задания, серия входов, сезон, достижения; факультеты; онлайн-лидерборды iDos; аналитика; Solana mainnet: кошелёк, привязка к профилю iDos, минт значков Metaplex Core с симуляцией и чтение баланса $SHAI через пул RPC; WebGL-рендер на PixiJS; процедурные звук и музыка; версионированные сохранения; адаптив под телефон и десктоп.
+- **Live game:** https://je8w0z54.idos.games/ · **Platform page:** https://idosgames.com/app/JE8W0Z54/
+- **Trailer:** [docs/media/trailer.mp4](docs/media/trailer.mp4)
+- **Docs (RU):** [Об игре](docs/GAME.md) · [Питч](docs/PITCH.md) · [Сценарий демо](docs/DEMO_SCRIPT.md) · [Известные ограничения](docs/KNOWN_ISSUES.md) · [Аудит](docs/AUDIT.md)
 
-**Заглушки и симуляции (помечены в интерфейсе):**
-- демо-соперники в таблицах, пока онлайн-таблица пустая или нет сети (строки «демо», в рейтинге не участвуют);
-- «фон кампуса» в войне факультетов: детерминированная недельная симуляция, к ней прибавляются реальные очки (онлайн это сумма iDos-досок `faculty_*`);
-- игровой $SHAI не выводится ончейн; казна не задана; NFT минтятся только для 4 достижений (косметика коллекции пока локальная).
+---
 
-## Как расширить до реальной сети
+## Коротко по-русски
 
-1. **$SHAI ончейн.** Начислять награды раунда на сервере (iDos CloudCode, проверка результата) в `Main_IOU`, а вывод делать через блокчейн-модуль iDos (`client.blockchain`: withdrawal/deposit токена `Main` в сети `solana`). Перед включением вывода свести decimals: в iDos указано 0, у минта 6 (см. KNOWN_ISSUES).
-2. **NFT-коллекция.** Сейчас значки — standalone Core-ассеты. Проверяемая коллекция требует подписи collection authority: её стоит выдавать serverless-подписчиком (CloudCode/функция), а не ключом в бандле. Косметику с `onchain: true` минтить тем же путём.
-3. **Рейтинг по кошелькам.** Кошелёк уже привязывается к профилю iDos (`auth.linkWallet`), поэтому таблицы iDos можно показывать с адресом. Лидерборды при этом остаются off-chain.
-4. **Облачные сохранения.** Реализовать `SaveStore` (`src/core/save.ts`) поверх iDos UserCustomData. Интерфейс уже отделён от localStorage.
-5. **Казна.** Задать `SOLANA.treasury` (мультисиг) и только после этого добавлять опциональные платные минты косметики.
-
-## Архитектура
-
-```
-src/
-  core/        loop · state · save (версии, миграции) · rng (детерминированный) · time · emitter
-  config/      balance.ts — все игровые числа
-  gameplay/    crane · block (оценка) · tower · stability · students · events · bonuses · deck · modes · round (симуляция без DOM)
-  meta/        rooms · collection · upgrades · progression (итоги раунда)
-  economy/     shai · shop · crafting
-  retention/   daily · weekly · season · quests (+ достижения)
-  social/      faculties (война) · leaderboards
-  platform/    backend (интерфейс + оффлайн) · idos (SDK)
-  solana/      config · rpc (пул с failover) · wallet · token · nft (Metaplex Core) · nftArt · actions
-  render/      world (PixiJS-рендерер) · blockView · roomExtras · textures (запекание) · warmGrade (свой GLSL-фильтр)
-               hud/ (Pixi HUD: button · hud · fonts) · rooms · shanyrak · sky · glyphs · color · menuScene
-  design/      skin (общая 9-slice дизайн-система для Pixi и CSS border-image) · icons
-  visuals/     particles (ParticleContainer, общий атлас)
-  audio/       sound (SFX + генеративная домбра)
-  analytics/   events
-  ui/          app (роутер) · dom · components/ · screens/ (12 экранов + модальные окна)
-  game.ts      mountGame(host) · main.ts — точка входа страницы
-tests/         round.test.ts · meta.test.ts
-idos/          шаблон модуля для хоста iDos
-```
-
-Логика и рендер разделены: `Round` хранит только состояние и шлёт события, `Renderer` это состояние читает, HUD подписан на события. Поэтому симуляцию можно прогонять в тестах ботом, без браузера.
+**Шанырак: Кампус-Башня** — аркада одной кнопки: сбрасываете с крана комнаты студенческого кампуса, ловите «Идеально» и комбо, переживаете ветер и дедлайны, а каждый раунд венчает шанырак. Играть можно сразу и без кошелька; онлайн-рейтинги и аналитика — на iDos Games. Solana — по желанию: значок-NFT за достижение (Metaplex Core, mainnet) с точной ценой до подписи. Подробно — в [docs/GAME.md](docs/GAME.md).

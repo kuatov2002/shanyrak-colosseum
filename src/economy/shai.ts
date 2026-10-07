@@ -1,7 +1,7 @@
 // $SHAI — the in-game currency. Source of truth is the local ledger (SaveData.shai). It is soft
 // currency only: it cannot be bought with money in this build and the game never promises
 // earnings. The on-chain $SHAI token (iDos title JE8W0Z54, currency "Main") is shown read-only in
-// the wallet screen; bridging goes through the iDos blockchain module (see README).
+// the wallet screen; bridging goes through the iDos blockchain module (see docs/GAME.md).
 
 import type { Store } from "../core/state";
 import type { Materials } from "../core/save";

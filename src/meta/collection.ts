@@ -1,6 +1,6 @@
 // Cosmetic collection. Every item is purely visual/audio (no gameplay power), so nothing here can be
 // pay-to-win. Items are local today; `onchain` marks the ones designed to become NFTs later (the
-// id is the stable key a future mint would reference — see README "Solana").
+// id is the stable key a future mint would reference — see docs/GAME.md "Solana").
 
 import type { Rarity } from "./rooms";
 import type { FacultyId } from "../social/faculties";

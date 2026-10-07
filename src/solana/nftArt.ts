@@ -1,5 +1,5 @@
 // Badge art for achievement NFTs — the same drawing is used for the PNG files shipped with the
-// build (exported once in the browser, see scripts/README) and for the in-game badge previews.
+// build (exported once in the browser, see scripts/export-badges.md) and for the in-game badge previews.
 
 import badges from "./nft-badges.json";
 
