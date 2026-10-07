@@ -8,7 +8,7 @@ import type { ModeId } from "../gameplay/types";
 import type { RoundSummary } from "../meta/progression";
 import type { Backend } from "../platform/backend";
 import type { MenuScene } from "../render/menuScene";
-import type { Renderer } from "../render/renderer";
+import type { PixiRenderer } from "../render/world";
 import type { Leaderboards } from "../social/leaderboards";
 import type { SolanaActions } from "../solana/actions";
 import type { WalletManager } from "../solana/wallet";
@@ -35,7 +35,7 @@ export interface StartOptions {
 export interface App {
   store: Store;
   sound: Sound;
-  renderer: Renderer;
+  renderer: PixiRenderer;
   menuScene: MenuScene;
   backend(): Backend;
   leaderboards: Leaderboards;

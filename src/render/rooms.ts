@@ -20,6 +20,36 @@ export interface RoomDrawOptions {
   crack: number;
   seed: number;
   festive: boolean;
+  /** Bake mode for WebGL textures: windows dim (lit by separate glow sprites), no students. */
+  baked?: boolean;
+}
+
+export interface WindowRect {
+  /** Index of the window slot (used for per-window seeds). */
+  i: number;
+  cx: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Window slots of a room, in room-local coordinates (centre-bottom origin, y up is negative). */
+export function windowLayout(type: RoomId, w: number, h: number): WindowRect[] {
+  if (type === "garden") return [];
+  const slabH = h * 0.13;
+  const n = type === "foundation" ? 4 : windowCount(w);
+  const gap = w / n;
+  const ww = Math.min(30, gap - 12);
+  const wh = h * 0.42;
+  const wy = -slabH - 5 - wh;
+  const out: WindowRect[] = [];
+  for (let i = 0; i < n; i++) {
+    if (type === "foundation" && (i === 1 || i === 2)) continue;
+    const cx = -w / 2 + gap * (i + 0.5);
+    out.push({ i, cx, x: cx - ww / 2, y: wy, w: ww, h: wh });
+  }
+  return out;
 }
 
 interface Colors {
@@ -294,8 +324,8 @@ export function drawRoom(ctx: CanvasRenderingContext2D, type: RoomId, w: number,
   const ww = Math.min(30, gap - 12);
   const wh = h * 0.42;
   const wy = -slabH - 5 - wh;
-  const glowA = 0.55 + 0.45 * o.glow;
-  let studentsLeft = Math.floor(o.students);
+  const glowA = o.baked ? 0.34 : 0.55 + 0.45 * o.glow;
+  let studentsLeft = o.baked ? 0 : Math.floor(o.students);
   for (let i = 0; i < n; i++) {
     const cx = x0 + gap * (i + 0.5);
     if (type === "foundation" && (i === 1 || i === 2)) continue;
@@ -322,7 +352,7 @@ export function drawRoom(ctx: CanvasRenderingContext2D, type: RoomId, w: number,
     }
     ctx.fillStyle = lit;
     ctx.fill();
-    if (o.glow > 0.5) {
+    if (o.glow > 0.5 && !o.baked) {
       ctx.save();
       ctx.shadowColor = type === "itlab" ? "#45e0ff" : PALETTE.windowHot;
       ctx.shadowBlur = 10 * o.glow;

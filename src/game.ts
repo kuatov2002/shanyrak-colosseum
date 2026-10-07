@@ -17,7 +17,7 @@ import { applyRoundResult, checkAchievements, rememberTower } from "./meta/progr
 import { LocalBackend, type Backend } from "./platform/backend";
 import { IdosBackend } from "./platform/idos";
 import { MenuScene } from "./render/menuScene";
-import { Renderer } from "./render/renderer";
+import { PixiRenderer } from "./render/world";
 import { ensureDaily, streakClaimable, touchStreak } from "./retention/daily";
 import { ensureSeason } from "./retention/season";
 import { ensureWeekly } from "./retention/weekly";
@@ -55,8 +55,46 @@ export interface GameHandle {
   destroy(): void;
 }
 
+/**
+ * Mount the game into a host element. WebGL (PixiJS) starts asynchronously; the handle works right
+ * away and forwards to the game once it is ready.
+ */
 export function mountGame(root: HTMLElement, opts: MountOptions = {}): GameHandle {
+  let inner: GameHandle | null = null;
+  let destroyed = false;
+  let running = true;
   root.classList.add("shanyrak-root");
+  bootGame(root, opts)
+    .then((g) => {
+      if (destroyed) g.destroy();
+      else {
+        inner = g;
+        if (!running) g.setRunning(false);
+      }
+    })
+    .catch((err) => {
+      console.error("[shanyrak] boot failed", err);
+      const boot = document.getElementById("boot");
+      const msg = "Не удалось запустить WebGL. Обновите браузер или включите аппаратное ускорение.";
+      if (boot) boot.textContent = msg;
+      else root.textContent = msg;
+    });
+  return {
+    setRunning(r) {
+      running = r;
+      inner?.setRunning(r);
+    },
+    capture: () => inner?.capture() ?? Promise.resolve(null),
+    drop: () => inner?.drop() ?? false,
+    state: () => inner?.state() ?? { booting: true },
+    destroy() {
+      destroyed = true;
+      inner?.destroy();
+    },
+  };
+}
+
+async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHandle> {
 
   // ── State & services ───────────────────────────────────────────────────────
   const store = new Store(new LocalSaveStore());
@@ -69,7 +107,7 @@ export function mountGame(root: HTMLElement, opts: MountOptions = {}): GameHandl
   sound.setVolumes(store.data.settings.sfx, store.data.settings.music);
   sound.setTheme(store.data.equipped.music as "mus_campus");
 
-  const renderer = new Renderer(root);
+  const renderer = await PixiRenderer.create(root);
   const uiRoot = h("div#ui");
   root.appendChild(uiRoot);
   const menuScene = new MenuScene(store.data.lastTower, store.data.player.faculty, { ...store.data.equipped });
@@ -328,13 +366,25 @@ export function mountGame(root: HTMLElement, opts: MountOptions = {}): GameHandl
       if (app.round && renderer.view === app.round) app.round.update(dt);
       menuScene.update(dt);
     },
-    render(_alpha, frameDt) {
+    frame(_alpha, frameDt) {
       renderer.update(frameDt);
-      renderer.render();
       if (app.round && renderer.view === app.round) sound.setWind(app.round.wind);
     },
-  });
+  }, renderer.app.ticker);
   loop.start();
+
+  // One resize handler drives the WebGL canvas and the DOM layout together.
+  const resize = () => {
+    const w = root.clientWidth || window.innerWidth;
+    const hh = root.clientHeight || window.innerHeight;
+    renderer.resize(w, hh);
+    root.style.setProperty("--app-w", `${w}px`);
+    root.style.setProperty("--app-h", `${hh}px`);
+  };
+  const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
+  if (ro) ro.observe(root);
+  else listen(window, "resize", resize);
+  resize();
 
   // iDos "Shot" button / debugging surface
   (window as unknown as { __shanyrak?: unknown }).__shanyrak = {
@@ -380,6 +430,7 @@ export function mountGame(root: HTMLElement, opts: MountOptions = {}): GameHandl
     destroy() {
       store.flush();
       loop.dispose();
+      ro?.disconnect();
       sound.stopMusic();
       for (const off of detachRound) off();
       for (const [t, type, fn] of listeners) t.removeEventListener(type, fn);

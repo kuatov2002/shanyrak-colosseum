@@ -7,7 +7,7 @@ import type { Debris, FloatText } from "../gameplay/types";
 import type { Equipped } from "../meta/collection";
 import type { RoomId } from "../meta/rooms";
 import type { FacultyId } from "../social/faculties";
-import type { WorldView } from "./renderer";
+import type { WorldView } from "./world";
 
 const STARTER: RoomId[] = ["dorm", "chaikhana", "library", "canteen", "dorm", "gym", "garden"];
 
