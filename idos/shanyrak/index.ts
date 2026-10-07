@@ -1,0 +1,1 @@
+export { shanyrakModule } from "./module";

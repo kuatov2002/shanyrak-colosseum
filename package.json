@@ -1,0 +1,26 @@
+{
+  "name": "shanyrak-campus-tower",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Шанырак: Кампус-Башня — физико-аркадная строительная игра (iDos Games × Solana Superteam Kazakhstan)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@idosgames/core": "^0.21.2",
+    "@solana/web3.js": "^1.99.0",
+    "@wallet-standard/app": "^1.1.1",
+    "bs58": "^6.0.0",
+    "buffer": "^6.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}
