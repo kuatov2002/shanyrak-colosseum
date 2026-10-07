@@ -11,7 +11,7 @@
 
 ## Где поиграть
 
-- **Live:** https://je8w0z54.idos.games/ (версия 2, `bld4bcce369d4ce4a348b4d3b34979e520c`)
+- **Live:** https://je8w0z54.idos.games/ (версия 4, `bld62504d16ea814768a11afbd8301ca9fa`)
 - **Страница на iDos:** https://idosgames.com/app/JE8W0Z54/
 - Сборка для iDos делается с версионированным `AssetBase`: `npx vite build --base=<AssetBase из begin_build_upload>`. Тогда метаданные NFT-значков получают постоянные URI.
 
@@ -24,7 +24,7 @@ npm test           # 14 тестов: симуляция раундов, дет�
 npm run build      # tsc + vite → dist/ (относительные пути, подходит для iDos)
 ```
 
-Переменные окружения необязательны (см. `.env.example`): `VITE_IDOS_TITLE_ID` (по умолчанию `JE8W0Z54`), `VITE_IDOS_ENV`, `VITE_SOLANA_DEVNET_RPC`, `VITE_SOLANA_MAINNET_RPC`.
+Переменные окружения необязательны (см. `.env.example`): `VITE_IDOS_TITLE_ID` (по умолчанию `JE8W0Z54`), `VITE_IDOS_ENV`, `VITE_SOLANA_RPC` (основной RPC mainnet-beta; резервные endpoint подключаются автоматически).
 
 Стек: **TypeScript + Vite + PixiJS 8 (WebGL)**, меню на DOM без фреймворков. Экран раунда целиком рисует Pixi: мир, HUD, карточки бонусов и частицы. DOM остаётся только для модалок паузы и для live-области скринридера. Физика аркадная и своя, логика отделена от рендера. Весь арт и звук процедурные, внешних ассетов нет: формы один раз запекаются в GPU-текстуры, дальше их компонует, анимирует и фильтрует WebGL.
 

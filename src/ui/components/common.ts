@@ -62,21 +62,78 @@ export interface ModalHandle {
   body: HTMLElement;
 }
 
-export function modal(title: string, content: (body: HTMLElement, close: () => void) => void, opts: { dismissable?: boolean; cls?: string } = {}): ModalHandle {
+// Open dialogs, topmost last. Escape and the Tab focus trap act on the top one only.
+const openModals: { panel: HTMLElement; escape: () => void }[] = [];
+let modalSeq = 0;
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// Capture phase on document: runs before the game's window keydown handler, so Esc in a dialog
+// never also pauses or drops a room.
+function onModalKey(e: KeyboardEvent): void {
+  const top = openModals[openModals.length - 1];
+  if (!top) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    top.escape();
+  } else if (e.key === "Tab") {
+    const items = Array.from(top.panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null);
+    const active = document.activeElement;
+    if (!items.length) {
+      e.preventDefault();
+      top.panel.focus();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const outside = !top.panel.contains(active);
+    if (e.shiftKey && (active === first || active === top.panel || outside)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (active === last || outside)) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+}
+
+/**
+ * Accessible dialog: role="dialog" + aria-modal, focus moves inside and is trapped, Escape closes
+ * it (or calls `onEscape` for non-dismissable dialogs such as pause), focus returns to the opener.
+ */
+export function modal(
+  title: string,
+  content: (body: HTMLElement, close: () => void) => void,
+  opts: { dismissable?: boolean; cls?: string; onEscape?: () => void } = {},
+): ModalHandle {
   const body = h("div.modal-body");
+  const titleId = `modal-title-${++modalSeq}`;
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  let closed = false;
   const close = () => {
+    if (closed) return;
+    closed = true;
+    const i = openModals.indexOf(entry);
+    if (i >= 0) openModals.splice(i, 1);
+    if (!openModals.length) document.removeEventListener("keydown", onModalKey, true);
     root.classList.add("out");
     setTimeout(() => root.remove(), 220);
+    if (opener?.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
   };
   const panel = h(
     `div.modal${opts.cls ? `.${opts.cls}` : ""}`,
-    { onclick: (e: Event) => e.stopPropagation() },
-    h("div.modal-head", null, h("h3", null, title), opts.dismissable === false ? null : h("button.icon-btn", { type: "button", "aria-label": "Закрыть", onclick: close }, "✕")),
+    { role: "dialog", "aria-modal": "true", "aria-labelledby": titleId, tabindex: "-1", onclick: (e: Event) => e.stopPropagation() },
+    h("div.modal-head", null, h("h3", { id: titleId }, title), opts.dismissable === false ? null : h("button.icon-btn", { type: "button", "aria-label": "Закрыть", onclick: close }, "✕")),
     body,
   );
   const root = h("div.modal-backdrop", { onclick: () => opts.dismissable !== false && close() }, panel);
+  const entry = { panel, escape: () => (opts.onEscape ? opts.onEscape() : opts.dismissable !== false ? close() : undefined) };
+  openModals.push(entry);
+  if (openModals.length === 1) document.addEventListener("keydown", onModalKey, true);
   document.body.appendChild(root);
   content(body, close);
+  // Content may focus its primary action itself (pause does); otherwise focus the dialog.
+  if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
   return { close, body };
 }
 

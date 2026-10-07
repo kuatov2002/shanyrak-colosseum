@@ -85,14 +85,25 @@ export interface PreparedMint {
   /** Simulation ran and succeeded (false when the payer cannot even cover the fee). */
   simulated: boolean;
   logs: string[];
+  /** When the blockhash was fetched; a prepared mint older than ~45 s is re-simulated before signing. */
+  preparedAt: number;
   /** Internal: the asset keypair (kept in memory only for this mint). */
   _assetSecret: Uint8Array;
+}
+
+/** A prepared mint goes stale long before its blockhash formally expires (~60–90 s). */
+export const PREPARED_TTL_MS = 45_000;
+
+export function isStale(p: PreparedMint | undefined, now = Date.now()): boolean {
+  return !!p && now - p.preparedAt > PREPARED_TTL_MS;
 }
 
 export class MintError extends Error {
   constructor(
     message: string,
     readonly kind: "funds" | "rejected" | "rpc" | "program" | "expired" | "config",
+    /** Set when the transaction was already sent: it must be checked on chain before any retry. */
+    readonly signature?: string,
   ) {
     super(message);
   }
@@ -167,6 +178,7 @@ export async function prepareMint(owner: string, id: string): Promise<PreparedMi
     lastValidBlockHeight,
     simulated,
     logs,
+    preparedAt: Date.now(),
     _assetSecret: asset.secretKey,
   };
 }
@@ -192,9 +204,26 @@ export async function executeMint(p: PreparedMint, adapter: WalletAdapter, onSen
     if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")) return signature;
     const height = await conn.getBlockHeight("confirmed");
     if (height > p.lastValidBlockHeight) {
-      throw new MintError(`Транзакция не подтвердилась вовремя. Проверьте её в Explorer (${signature.slice(0, 8)}…) перед повтором.`, "expired");
+      throw new MintError("Транзакция не подтвердилась вовремя. Перед повтором игра сама проверит её в сети, ссылка на Explorer ниже.", "expired", signature);
     }
     await new Promise((r) => setTimeout(r, 1800));
   }
-  throw new MintError(`Подтверждение затянулось. Проверьте транзакцию ${signature.slice(0, 8)}… в Explorer перед повтором.`, "expired");
+  throw new MintError("Подтверждение затянулось. Перед повтором игра сама проверит транзакцию в сети, ссылка на Explorer ниже.", "expired", signature);
+}
+
+/**
+ * Outcome of an earlier mint whose confirmation timed out. The asset account is the ground truth
+ * (works without transaction history on the RPC); the block height tells whether the transaction
+ * can still land.
+ */
+export async function checkPendingMint(p: { asset: string; signature: string; lastValidBlockHeight: number }): Promise<"landed" | "failed" | "expired" | "pending"> {
+  const web3 = await import("@solana/web3.js");
+  const conn = await rpc.connection();
+  const acc = await conn.getAccountInfo(new web3.PublicKey(p.asset), "confirmed");
+  if (acc && acc.owner.toBase58() === SOLANA.coreProgramId) return "landed";
+  const st = (await conn.getSignatureStatuses([p.signature], { searchTransactionHistory: true })).value[0];
+  if (st?.err) return "failed";
+  if (st?.confirmationStatus === "confirmed" || st?.confirmationStatus === "finalized") return "landed";
+  const height = await conn.getBlockHeight("confirmed");
+  return height > p.lastValidBlockHeight ? "expired" : "pending";
 }

@@ -75,8 +75,9 @@ export function openMintDialog(app: App, id: string): void {
     });
     observer.observe(document.body, { childList: true });
     render();
+    // Re-opened after a while: a "ready" transaction may carry an expiring blockhash, simulate again.
     const st = app.actions.get(key).status;
-    if (st === "idle" || st === "error" || st === "success") void app.actions.prepareBadge(id);
+    if (st === "idle" || st === "error" || st === "success" || app.actions.stale(key)) void app.actions.prepareBadge(id);
   });
 }
 

@@ -6,7 +6,7 @@ import { Emitter } from "../core/emitter";
 import type { Store } from "../core/state";
 import type { Backend } from "../platform/backend";
 import { SOLANA } from "./config";
-import { executeMint, fmtSol, MintError, prepareMint, type PreparedMint } from "./nft";
+import { checkPendingMint, executeMint, fmtSol, isStale, MintError, prepareMint, type PreparedMint } from "./nft";
 import { describeRpcError } from "./token";
 import { describeWalletError, type WalletManager } from "./wallet";
 
@@ -51,6 +51,12 @@ export class SolanaActions {
     if (s.status === "success" || s.status === "error") this.track("onchain_action", { action: id, status: s.status });
   }
 
+  /** A prepared mint waiting for confirmation whose blockhash is about to expire. */
+  stale(id: string): boolean {
+    const st = this.get(id);
+    return st.status === "ready" && isStale(st.prepared);
+  }
+
   busy(id: string): boolean {
     const st = this.get(id).status;
     return st === "checking" || st === "awaiting-wallet" || st === "sending";
@@ -93,7 +99,40 @@ export class SolanaActions {
       this.set(key, { status: "error", message: "Сначала подключите кошелёк." });
       return;
     }
-    this.set(key, { status: "checking", message: "Симулируем транзакцию в Solana mainnet…", prepared: undefined });
+    // An earlier attempt timed out after sending: find out what happened before minting again.
+    const pending = this.store.data.wallet.pendingMints[id];
+    if (pending) {
+      this.set(key, { status: "checking", message: "Проверяем в сети прошлую транзакцию…", prepared: undefined });
+      try {
+        const outcome = await checkPendingMint(pending);
+        if (outcome === "landed") {
+          this.store.mutate((s) => {
+            s.wallet.minted[id] = { asset: pending.asset, signature: pending.signature, at: pending.at };
+            s.wallet.records.unshift({ kind: "nft-mint", signature: pending.signature, at: pending.at, note: `Значок ${id} · ${pending.asset.slice(0, 6)}… (подтверждён позже)` });
+            delete s.wallet.pendingMints[id];
+          });
+          this.set(key, { status: "success", signature: pending.signature, explorer: SOLANA.explorerTx(pending.signature), message: "Прошлая транзакция всё-таки прошла — значок уже ваш. Повторный минт не нужен." });
+          return;
+        }
+        if (outcome === "pending") {
+          this.set(key, {
+            status: "error",
+            signature: pending.signature,
+            explorer: SOLANA.explorerTx(pending.signature),
+            message: "Прошлая транзакция ещё может пройти. Подождите минуту и нажмите «Повторить» — игра проверит её снова.",
+          });
+          return;
+        }
+        // failed or expired: it can never land, a new mint is safe
+        this.store.mutate((s) => {
+          delete s.wallet.pendingMints[id];
+        });
+      } catch (err) {
+        this.set(key, { status: "error", message: describeRpcError(err) });
+        return;
+      }
+    }
+    this.set(key, { status: "checking", message: "Симулируем транзакцию в Solana mainnet…", prepared: undefined, signature: undefined, explorer: undefined });
     try {
       const p = await prepareMint(address, id);
       const total = p.rentLamports + p.feeLamports;
@@ -118,15 +157,30 @@ export class SolanaActions {
     const adapter = this.wallet.adapter;
     const p = st.prepared;
     if (!p || st.status !== "ready" || !adapter) return;
+    if (isStale(p)) {
+      // The blockhash is about to expire: re-simulate and let the player confirm the fresh amount.
+      await this.prepareBadge(id);
+      if (this.get(key).status === "ready") this.set(key, { message: "Данные сети обновились — проверьте сумму и подпишите ещё раз." });
+      return;
+    }
     this.set(key, { status: "awaiting-wallet", message: "Подтвердите транзакцию в кошельке." });
     try {
       const signature = await executeMint(p, adapter, () => this.set(key, { status: "sending", message: "Отправляем и ждём подтверждения сети…" }));
       this.store.mutate((s) => {
+        delete s.wallet.pendingMints[id];
         s.wallet.minted[id] = { asset: p.asset, signature, at: Date.now() };
         s.wallet.records.unshift({ kind: "nft-mint", signature, at: Date.now(), note: `Значок «${p.name}» · ${p.asset.slice(0, 6)}…` });
       });
       this.set(key, { status: "success", signature, explorer: SOLANA.explorerTx(signature), prepared: undefined, message: `Значок сминчен. Asset: ${p.asset.slice(0, 8)}…` });
     } catch (err) {
+      if (err instanceof MintError && err.kind === "expired" && err.signature) {
+        const signature = err.signature;
+        this.store.mutate((s) => {
+          s.wallet.pendingMints[id] = { asset: p.asset, signature, lastValidBlockHeight: p.lastValidBlockHeight, at: Date.now() };
+        });
+        this.set(key, { status: "error", message: err.message, signature, explorer: SOLANA.explorerTx(signature), prepared: undefined });
+        return;
+      }
       const msg =
         err instanceof MintError
           ? err.message

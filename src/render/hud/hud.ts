@@ -38,6 +38,9 @@ const hex = (c: string) => {
   return (r << 16) | (g << 8) | b;
 };
 
+const numberFormat = new Intl.NumberFormat("ru-RU");
+const fmtNum = (n: number) => numberFormat.format(n);
+
 function text(font: string, size: number, value = "", tint = 0xffffff): BitmapText {
   const t = new BitmapText({ text: value, style: { fontFamily: font, fontSize: size } });
   t.tint = tint;
@@ -132,6 +135,10 @@ export class Hud extends Container {
   private bannerSub!: BitmapText;
   private bannerT = 0;
   private bannerDur = 0;
+  private hintY = 0;
+  /** Last values formatted into HUD text (formatting only on change, not every frame). */
+  private shown = { score: -1, shai: -1, students: -1 };
+  private comboShab = false;
   private crownBtn: PixiButton;
   private skipBtn: PixiButton;
   // bonus offer
@@ -251,6 +258,11 @@ export class Hud extends Container {
     return this.offer.visible;
   }
 
+  /** Landscape phones (e.g. 812×375): one top row and two side columns keep the swing column clear. */
+  private get short(): boolean {
+    return this.w >= 520 && this.h < 520;
+  }
+
   attach(round: Round, cb: HudCallbacks): void {
     this.detach();
     this.round = round;
@@ -259,6 +271,7 @@ export class Hud extends Container {
     this.nextKey = "";
     this.bonusKey = "";
     this.lastCombo = 0;
+    this.shown = { score: -1, shai: -1, students: -1 };
     this.banner.visible = false;
     this.offer.visible = false;
     const cfg = round.cfg;
@@ -416,6 +429,14 @@ export class Hud extends Container {
     this.cb?.onPickBonus(id);
   }
 
+  /** Opens the pause menu exactly like the Pixi pause button (Esc/P, tab hidden, host suspend, context loss). */
+  requestPause(): boolean {
+    const r = this.round;
+    if (!r || !this.cb || r.paused || r.phase === "done") return false;
+    this.cb.onPause();
+    return true;
+  }
+
   /** Keyboard support; returns true when the key was consumed. */
   handleKey(code: string): boolean {
     if (!this.attached) return false;
@@ -455,20 +476,22 @@ export class Hud extends Container {
     this.h = h;
     if (!w || !h) return;
     const narrow = w < 520;
+    const short = this.short;
     const top = 8;
     this.heightText.position.set(12, top);
     this.floorLabel.position.set(14, top + 50);
     this.scoreText.position.set(12, top + 66);
     this.pauseBtn.position.set(w - this.pauseBtn.buttonWidth - 10, top);
     // stability bar
-    const sw = Math.min(560, w - 20);
-    const sy = narrow ? 112 : 92;
-    this.stab.position.set((w - sw) / 2, sy);
+    // Landscape phones: the bar joins the top row between the score and the coin pills.
+    const sw = short ? Math.max(240, Math.min(440, w - 470)) : Math.min(560, w - 20);
+    const sy = narrow ? 112 : short ? top : 92;
+    this.stab.position.set(short ? 130 : (w - sw) / 2, sy);
     this.stabFrame.width = sw;
     this.stabFrame.height = 30;
-    this.stabLabel.visible = !narrow;
+    this.stabLabel.visible = !narrow && !short;
     this.stabLabel.position.set(14, 8);
-    const trackX = narrow ? 14 : 110;
+    const trackX = narrow || short ? 14 : 110;
     const trackW = sw - trackX - 156;
     this.stabTrack.position.set(trackX, 8);
     this.stabTrack.width = trackW;
@@ -489,8 +512,15 @@ export class Hud extends Container {
     this.nextTitle.position.set((cw - this.nextTitle.width) / 2, 8);
     this.nextThumb.position.set(cw / 2, this.nextBg.height / 2 + 2);
     this.nextName.position.set((cw - this.nextName.width) / 2, this.nextBg.height - 22);
-    this.combo.position.set(w / 2, h * 0.27);
-    this.pills.position.set(w / 2, h * 0.46);
+    if (short) {
+      // Right column under the next-room card; the centre stays free for the swing and the fall.
+      const nextBottom = this.nextCard.y + this.nextBg.height;
+      this.combo.position.set(w - cw / 2 - 10, nextBottom + 54);
+      this.pills.position.set(w - 120, nextBottom + 110);
+    } else {
+      this.combo.position.set(w / 2, h * 0.27);
+      this.pills.position.set(w / 2, h * 0.46);
+    }
     this.bonusRow.position.set(12, h - 96);
     this.crownBtn.position.set((w - this.crownBtn.buttonWidth) / 2, h - this.crownBtn.buttonHeight - 16);
     this.skipBtn.position.set(10, h - this.skipBtn.buttonHeight - 14);
@@ -502,20 +532,25 @@ export class Hud extends Container {
   private layoutHint(): void {
     if (!this.hint.visible) return;
     const narrow = this.w < 520;
-    const maxW = narrow ? this.w - 130 : Math.min(460, this.w * 0.7);
+    const short = this.short;
+    const maxW = narrow ? this.w - 130 : short ? Math.min(280, this.w * 0.34) : Math.min(460, this.w * 0.7);
     this.hintText.style.wordWrap = true;
     this.hintText.style.wordWrapWidth = maxW - 28;
     this.hintText.position.set(14, 10);
     const bw = Math.min(maxW, this.hintText.width + 28);
     this.hintBg.width = bw;
     this.hintBg.height = this.hintText.height + 20;
-    const y = narrow ? 200 : 134;
-    this.hint.position.set(narrow ? 10 : (this.w - bw) / 2, y);
+    // Phones: directly under the stability bar (portrait) or in the left column (landscape), never
+    // over the swinging room. The mode label hides while the hint is up (same spot).
+    const y = narrow ? this.stab.y + 38 : short ? 96 : 134;
+    this.hintY = y;
+    this.hint.position.set(narrow || short ? 10 : (this.w - bw) / 2, y);
   }
 
   private layoutBanner(): void {
     if (!this.banner.visible) return;
-    const maxW = Math.min(460, this.w * 0.9);
+    const short = this.short;
+    const maxW = short ? Math.min(260, this.w * 0.3) : Math.min(460, this.w * 0.9);
     this.bannerSub.style.wordWrap = true;
     this.bannerSub.style.wordWrapWidth = maxW - 32;
     this.bannerSub.style.align = "center";
@@ -526,7 +561,8 @@ export class Hud extends Container {
     this.bannerTitle.position.set(bw / 2, 14);
     this.bannerSub.position.set(bw / 2, 18 + this.bannerTitle.height + 2);
     this.banner.pivot.set(bw / 2, bh / 2);
-    this.banner.position.set(this.w / 2, this.h * 0.36);
+    if (short) this.banner.position.set(12 + bw / 2, this.h * 0.62);
+    else this.banner.position.set(this.w / 2, this.h * 0.36);
   }
 
   private layoutOffer(): void {
@@ -596,9 +632,18 @@ export class Hud extends Container {
       if (t.text !== v) t.text = v;
     };
     set(this.heightText, String(r.height));
-    set(this.scoreText, `${r.score.toLocaleString("ru-RU")} очков`);
-    this.shaiPill.set(r.shai.toLocaleString("ru-RU"));
-    this.studentPill.set(r.students.toLocaleString("ru-RU"));
+    if (r.score !== this.shown.score) {
+      this.shown.score = r.score;
+      set(this.scoreText, `${fmtNum(r.score)} очков`);
+    }
+    if (r.shai !== this.shown.shai) {
+      this.shown.shai = r.shai;
+      this.shaiPill.set(fmtNum(r.shai));
+    }
+    if (r.students !== this.shown.students) {
+      this.shown.students = r.students;
+      this.studentPill.set(fmtNum(r.students));
+    }
     const right = this.w - this.pauseBtn.buttonWidth - 16;
     this.shaiPill.position.set(right - this.shaiPill.w - this.studentPill.w - 6, 14);
     this.studentPill.position.set(right - this.studentPill.w, 14);
@@ -614,13 +659,18 @@ export class Hud extends Container {
     this.lives.forEach((l, i) => (l.alpha = i < r.lives ? 1 : 0.18));
     // mode / event / mission chips under the mode label
     const narrow = this.w < 520;
+    const short = this.short;
+    const side = narrow || short;
     const midX = this.w / 2;
-    // Narrow phones: mode label and chips go under the stability bar, left of the next-room card
-    const chipMaxW = narrow ? this.w - 130 : this.w * 0.5;
-    const chipX = (cw: number) => (narrow ? 10 : midX - cw / 2);
+    // Narrow phones: mode label and chips go under the stability bar, left of the next-room card.
+    // Landscape phones: the left column under the score.
+    const chipMaxW = narrow ? this.w - 130 : short ? Math.min(220, this.w * 0.27) : this.w * 0.5;
+    const chipX = (cw: number) => (side ? 10 : midX - cw / 2);
     if (narrow) this.modeLabel.position.set(12, this.stab.y + 38);
+    else if (short) this.modeLabel.position.set(12, 96);
     else this.modeLabel.position.set(midX - this.modeLabel.width / 2, 10);
-    let chipY = narrow ? this.stab.y + 56 : 30;
+    this.modeLabel.visible = !(side && this.hint.visible);
+    let chipY = narrow ? this.stab.y + 56 : short ? 114 : 30;
     const evText = r.event ? `${EVENTS[r.event.id].name} · ещё ${r.event.left}` : r.mission?.constantWind ? "Ветреный день" : "";
     this.eventChip.visible = !!evText;
     if (evText) {
@@ -661,7 +711,10 @@ export class Hud extends Container {
       this.comboLabel.position.set(0, 36);
       const shab = r.shabytLevel > 0;
       this.comboText.tint = shab ? 0xffb347 : 0xffd75e;
-      this.comboText.filters = shab ? [this.comboGlow] : [];
+      if (shab !== this.comboShab) {
+        this.comboShab = shab;
+        this.comboText.filters = shab ? [this.comboGlow] : null;
+      }
       this.comboGlow.outerStrength = 1.5 + Math.sin(this.time * 6) * 0.8;
       this.comboPop = Math.max(0, this.comboPop - dt * 4);
       this.combo.scale.set(1 + this.comboPop * 0.35);
@@ -715,7 +768,7 @@ export class Hud extends Container {
       if (this.bannerT > this.bannerDur) this.banner.visible = false;
     }
     // hint bob
-    if (this.hint.visible && this.w >= 520) this.hint.y = 134 + Math.sin(this.time * 4.5) * 3;
+    if (this.hint.visible && !side) this.hint.y = this.hintY + Math.sin(this.time * 4.5) * 3;
     // offer animation & focus
     if (this.offer.visible) {
       this.offerT += dt;

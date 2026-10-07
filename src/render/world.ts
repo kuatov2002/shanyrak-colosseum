@@ -87,6 +87,14 @@ async function loadFonts(): Promise<void> {
   }
 }
 
+/** How many to spawn this frame for a per-second rate: frame-rate independent and unbiased. */
+function spawnCount(perSec: number, dt: number): number {
+  return Math.floor(perSec * dt + Math.random());
+}
+
+/** Ambient weather stops spawning above this, so gameplay feedback bursts always find free slots. */
+const AMBIENT_BUDGET = 900;
+
 export class PixiRenderer {
   readonly app: Application;
   readonly bank = new TextureBank();
@@ -96,6 +104,8 @@ export class PixiRenderer {
   focus = 0.5;
   scale = 1;
   contextLost = false;
+  /** Called when the WebGL context is lost (true) or restored (false). */
+  onContextChange?: (lost: boolean) => void;
 
   private cssW = 0;
   private cssH = 0;
@@ -194,8 +204,15 @@ export class PixiRenderer {
     canvas.className = "world";
     canvas.setAttribute("aria-hidden", "true");
     parent.prepend(canvas);
-    canvas.addEventListener("webglcontextlost", () => (r.contextLost = true));
-    canvas.addEventListener("webglcontextrestored", () => (r.contextLost = false));
+    // Pixi itself re-uploads textures on restore; the game only needs to know to pause and explain.
+    canvas.addEventListener("webglcontextlost", () => {
+      r.contextLost = true;
+      r.onContextChange?.(true);
+    });
+    canvas.addEventListener("webglcontextrestored", () => {
+      r.contextLost = false;
+      r.onContextChange?.(false);
+    });
     r.build();
     r.resize(parent.clientWidth || window.innerWidth, parent.clientHeight || window.innerHeight);
     return r;
@@ -545,12 +562,13 @@ export class PixiRenderer {
   private emitAmbient(v: WorldView, dt: number): void {
     this.steamT += dt;
     const topY = v.tower.topY;
+    const ambientOk = this.particles.count < AMBIENT_BUDGET;
     if (this.steamT > 0.22) {
       this.steamT = 0;
       for (const b of v.tower.blocks) {
         if (b.type !== "chaikhana" && b.type !== "canteen") continue;
         const sy = this.screenY(b.floor * H + H);
-        if (sy < -40 || sy > this.cssH + 40) continue;
+        if (!ambientOk || sy < -40 || sy > this.cssH + 40) continue;
         if (b.type === "canteen" && Math.random() < 0.6) continue;
         const x = v.tower.visualX(b) + b.w * 0.3;
         this.particles.spawn({ kind: "steam", x, y: (b.floor + 1) * H + 4, vx: 6 + v.wind * v.windDir * 40, vy: 28, life: 2, size: 5, color: "#f4efe4", g: 6, drag: 0.4 });
@@ -574,20 +592,23 @@ export class PixiRenderer {
     const rate = this.opts.reducedMotion ? 0.35 : 1;
     this.leavesT += dt;
     const leafEvery = v.wind > 0.05 ? 0.12 : 0.9;
-    if (!this.opts.menu && this.leavesT > leafEvery / rate) {
+    if (!this.opts.menu && ambientOk && this.leavesT > leafEvery / rate) {
       this.leavesT = 0;
       const dir = v.wind > 0.05 ? v.windDir : Math.random() < 0.5 ? 1 : -1;
       this.particles.spawn({ kind: "leaf", x: dir > 0 ? -20 : this.cssW + 20, y: this.cssH * (0.25 + Math.random() * 0.5), vx: dir * (60 + v.wind * 260 + Math.random() * 40), vy: 20 + Math.random() * 30, life: 7, size: 5, color: ["#7fb85a", "#e0a63a", "#c8643b", "#a9d46a"][Math.floor(Math.random() * 4)], g: 12, vr: (Math.random() - 0.5) * 4, drag: 0.1, screen: true });
     }
-    if (v.wind > 0.05 && Math.random() < v.wind * 0.9 * rate) {
+    // Rates are per second (tuned at 60 fps): 120/144/240 Hz screens get the same density.
+    const windN = ambientOk && v.wind > 0.05 ? spawnCount(v.wind * 54 * rate, dt) : 0;
+    for (let n = 0; n < windN; n++) {
       const fromLeft = v.windDir > 0;
       this.particles.spawn({ kind: "wind", x: fromLeft ? -40 : this.cssW + 40, y: Math.random() * this.cssH * 0.8, vx: v.windDir * (500 + Math.random() * 300), vy: 0, life: 1.6, size: 1, color: "#e8f4ff", screen: true, rot: 0 });
     }
     const weather = this.opts.menu ? "clear" : (v.cfg.weather ?? "clear");
-    if (weather === "rain" && Math.random() < 0.9 * rate) {
-      for (let i = 0; i < 2; i++) this.particles.spawn({ kind: "rain", x: Math.random() * this.cssW * 1.2 - 40, y: -10, vx: -60 + v.wind * v.windDir * 200, vy: 900, life: 1.4, size: 1, color: "#bed7ff", screen: true, rot: 0.06 });
-    } else if (weather === "snow" && Math.random() < 0.6 * rate) {
-      this.particles.spawn({ kind: "snow", x: Math.random() * this.cssW, y: -10, vx: v.wind * v.windDir * 120 + (Math.random() - 0.5) * 20, vy: 50 + Math.random() * 40, life: 12, size: 1.6 + Math.random() * 2, color: "#ffffff", screen: true });
+    const weatherN = !ambientOk ? 0 : weather === "rain" ? spawnCount(108 * rate, dt) : weather === "snow" ? spawnCount(36 * rate, dt) : 0;
+    if (weather === "rain") {
+      for (let i = 0; i < weatherN; i++) this.particles.spawn({ kind: "rain", x: Math.random() * this.cssW * 1.2 - 40, y: -10, vx: -60 + v.wind * v.windDir * 200, vy: 900, life: 1.4, size: 1, color: "#bed7ff", screen: true, rot: 0.06 });
+    } else if (weather === "snow") {
+      for (let i = 0; i < weatherN; i++) this.particles.spawn({ kind: "snow", x: Math.random() * this.cssW, y: -10, vx: v.wind * v.windDir * 120 + (Math.random() - 0.5) * 20, vy: 50 + Math.random() * 40, life: 12, size: 1.6 + Math.random() * 2, color: "#ffffff", screen: true });
     }
     const due = this.fireworkQueue.filter((f) => f.at <= this.time);
     this.fireworkQueue = this.fireworkQueue.filter((f) => f.at > this.time);

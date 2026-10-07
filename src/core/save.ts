@@ -37,6 +37,14 @@ export interface MintedBadge {
   at: number;
 }
 
+/** A sent mint whose confirmation timed out. Checked on chain before any retry (no double mint). */
+export interface PendingMint {
+  asset: string;
+  signature: string;
+  lastValidBlockHeight: number;
+  at: number;
+}
+
 export interface Materials {
   brick: number;
   felt: number;
@@ -100,6 +108,7 @@ export interface SaveData {
     linkedToProfile: boolean;
     records: OnchainRecord[];
     minted: Record<string, MintedBadge>;
+    pendingMints: Record<string, PendingMint>;
   };
 }
 
@@ -157,7 +166,7 @@ export function defaultSave(): SaveData {
     lastTower: [],
     war: { lastRewardWeek: "" },
     settings: { music: 0.5, sfx: 0.8, vibration: true, reducedMotion: false, guide: true, online: true, analytics: true },
-    wallet: { address: null, walletName: null, linkedToProfile: false, records: [], minted: {} },
+    wallet: { address: null, walletName: null, linkedToProfile: false, records: [], minted: {}, pendingMints: {} },
   };
 }
 
@@ -184,8 +193,8 @@ const MIGRATIONS: Migration[] = [
       ...d,
       // The demo wallet is gone: its fake address must not look like a real one.
       wallet: wallet.walletName === "Демо-кошелёк"
-        ? { address: null, walletName: null, linkedToProfile: false, records: [], minted: {} }
-        : { address: wallet.address ?? null, walletName: wallet.walletName ?? null, linkedToProfile: false, records: [], minted: {} },
+        ? { address: null, walletName: null, linkedToProfile: false, records: [], minted: {}, pendingMints: {} }
+        : { address: wallet.address ?? null, walletName: wallet.walletName ?? null, linkedToProfile: false, records: [], minted: {}, pendingMints: {} },
       scores: scores.map(({ wallet: _w, verifiedTx: _v, ...rest }) => rest),
       version: 3,
     };

@@ -552,9 +552,22 @@ main.scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; over
 @media (prefers-reduced-transparency: reduce) {
   .topbar, .bottom-nav, .modal-backdrop { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #141030 !important; }
 }
+/* Reduced motion (OS setting or the in-game "Меньше движения") also drops every backdrop blur. */
 @media (prefers-reduced-motion: reduce) {
-  .modal-backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .topbar, .bottom-nav, .modal-backdrop { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .topbar, .bottom-nav { background: rgba(16, 14, 40, 0.94) !important; }
 }
+.reduced-motion .topbar, .reduced-motion .bottom-nav, .reduced-motion .modal-backdrop { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.reduced-motion .topbar, .reduced-motion .bottom-nav { background: rgba(16, 14, 40, 0.94) !important; }
+
+/* The iDos host pins a "Made with iDos Games" badge to the bottom-right corner (fixed, max z-index):
+   lift the bottom navigation above it so taps on the last tabs never land on the badge. */
+body:has(#idos-made-with) .bottom-nav { padding-bottom: calc(40px + var(--safe-bottom)); }
+
+/* WebGL context lost: explain and offer a reload (src/game.ts). */
+.gl-notice { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 60; max-width: min(340px, calc(100vw - 32px)); padding: 18px 20px; border-radius: 16px; background: var(--panel-solid, #1d1840); color: var(--text, #fff); text-align: center; display: grid; gap: 12px; pointer-events: auto; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+.gl-notice p { margin: 0; }
+.modal:focus { outline: none; }
 
 /* ── Round: the canvas owns the screen; DOM only for modals ───────── */
 .round-screen.screen { pointer-events: none; }

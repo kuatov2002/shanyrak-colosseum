@@ -20,7 +20,7 @@ export function roundScreen(app: App): Screen {
   const el = h(
     "div.round-screen",
     null,
-    h("h1.sr-only", null, `${MODES[cfg.mode].name}. Нажмите пробел или тапните, чтобы сбросить комнату; Esc — пауза.`),
+    h("h1.sr-only", null, `${MODES[cfg.mode].name}. Нажмите пробел или тапните, чтобы сбросить комнату; Esc или P — пауза, Esc в паузе — продолжить.`),
     live,
   );
   const say = (t: string) => {
@@ -41,9 +41,10 @@ export function roundScreen(app: App): Screen {
   const openPause = () => {
     if (round.phase === "done" || pauseModal) return;
     round.paused = true;
+    let resume = () => {};
     pauseModal = modal("Пауза", (body, close) => {
       const d = app.store.data;
-      const resume = () => {
+      resume = () => {
         close();
         pauseModal = null;
         round.paused = false;
@@ -67,7 +68,7 @@ export function roundScreen(app: App): Screen {
         }, { kind: "danger" }),
       );
       (body.querySelector("button") as HTMLButtonElement | null)?.focus();
-    }, { dismissable: false });
+    }, { dismissable: false, onEscape: () => resume() });
   };
 
   app.renderer.hudUi.attach(round, {

@@ -2,16 +2,25 @@
   "id": "shanyrak",
   "type": "template",
   "summary": "Шанырак: Кампус-Башня — one-tap stacking arcade: drop campus rooms, keep the tower steady, crown it with a shanyrak.",
-  "description": "Canvas 2D stacking game with 12 room types and neighbour synergies, events (wind, deadline, exam, Nauryz, session night, festival), bonus picks, campaign, daily seeded tower, faculty war, season pass, quests and optional Solana devnet actions. Uses the title's leaderboards daily_tower, best_height, weekly_score and faculty_*.",
+  "description": "PixiJS (WebGL) stacking game with 12 room types and neighbour synergies, events (wind, deadline, exam, Nauryz, session night, festival), bonus picks, campaign, daily seeded tower, faculty war, season pass, quests and optional Solana mainnet actions (wallet ↔ iDos profile link, achievement-badge mint as Metaplex Core assets). Uses the title's leaderboards daily_tower, best_height, weekly_score and faculty_*.",
   "provides": [
     "one-tap stacking game",
     "daily seeded tower",
     "faculty weekly war",
     "campaign of 8 missions",
     "season pass and quests (local)",
-    "optional Solana wallet actions (devnet)"
+    "optional Solana mainnet actions (profile link, badge mint)"
   ],
-  "tags": ["arcade", "stacking", "casual", "leaderboard", "solana", "kazakhstan"],
-  "author": { "name": "Shanyrak team" },
+  "tags": [
+    "arcade",
+    "stacking",
+    "casual",
+    "leaderboard",
+    "solana",
+    "kazakhstan"
+  ],
+  "author": {
+    "name": "Shanyrak team"
+  },
   "version": "0.1.0"
 }

@@ -25,7 +25,7 @@ import { Leaderboards } from "./social/leaderboards";
 import { SolanaActions } from "./solana/actions";
 import { WalletManager } from "./solana/wallet";
 import { Router, type App, type ScreenId, type StartOptions } from "./ui/app";
-import { toast } from "./ui/components/common";
+import { button, toast } from "./ui/components/common";
 import { h } from "./ui/dom";
 import { campaignScreen } from "./ui/screens/campaign";
 import { facultyScreen } from "./ui/screens/faculty";
@@ -177,7 +177,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
     sound.setWind(0);
   };
 
-  store.changed.on(() => {
+  const offStore = store.changed.on(() => {
     router.queueRefresh();
     renderer.opts.reducedMotion = store.data.settings.reducedMotion || osReducedMotion();
     renderer.opts.guide = store.data.settings.guide;
@@ -357,7 +357,9 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
       sound.unlock();
       app.round.drop();
     } else if (e.code === "Escape" || e.code === "KeyP") {
-      (document.querySelector(".pause-btn") as HTMLButtonElement | null)?.click();
+      if (document.querySelector(".modal-backdrop")) return;
+      e.preventDefault();
+      renderer.hudUi.requestPause();
     }
   });
 
@@ -370,10 +372,28 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
     if (btn && !btn.disabled) sound.click();
   });
   listen(document, "visibilitychange", () => {
-    if (document.hidden && app.round && router.current?.id === "round" && app.round.phase !== "done" && !app.round.paused) {
-      (document.querySelector(".pause-btn") as HTMLButtonElement | null)?.click();
-    }
+    if (document.hidden && router.current?.id === "round") renderer.hudUi.requestPause();
   });
+
+  // WebGL context loss: pause the round (nothing is visible) and explain; offer a reload if the
+  // browser does not hand the context back. Progress is saved, so reloading is safe.
+  let glNotice: HTMLElement | null = null;
+  let glTimer = 0;
+  renderer.onContextChange = (lost) => {
+    clearTimeout(glTimer);
+    glNotice?.remove();
+    glNotice = null;
+    if (!lost) return;
+    if (router.current?.id === "round") renderer.hudUi.requestPause();
+    store.flush();
+    const msg = h("p", null, "Браузер временно отключил графику. Восстанавливаем…");
+    glNotice = h("div.gl-notice", { role: "alert" }, msg);
+    root.appendChild(glNotice);
+    glTimer = window.setTimeout(() => {
+      msg.textContent = "Графика не вернулась. Прогресс сохранён — перезагрузите игру.";
+      glNotice?.append(button("↻ Перезагрузить", () => location.reload(), { kind: "gold" }));
+    }, 5000);
+  };
 
   // ── Loop ──────────────────────────────────────────────────────────────────
 
@@ -421,7 +441,10 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
     startRound("tutorial");
   } else {
     router.go("home");
-    if (streakClaimable(store)) setTimeout(() => openStreak(app), 700);
+    // Only on the hub: never pop the streak dialog over a round the player already started.
+    setTimeout(() => {
+      if (router.current?.id === "home" && !document.querySelector(".modal-backdrop") && streakClaimable(store)) openStreak(app);
+    }, 700);
     if (weeklyNotice) setTimeout(() => toast(weeklyNotice.text, weeklyNotice.kind === "war-won" ? "reward" : "info", "🚩"), 1200);
   }
   void goOnline();
@@ -433,7 +456,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
       if (running) loop.start();
       else {
         loop.stop(true);
-        if (app.round && router.current?.id === "round" && !app.round.paused) (root.querySelector(".pause-btn") as HTMLButtonElement | null)?.click();
+        if (router.current?.id === "round") renderer.hudUi.requestPause();
       }
     },
     capture: () => renderer.capture(),
@@ -445,6 +468,8 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
     }),
     destroy() {
       store.flush();
+      offStore();
+      clearTimeout(glTimer);
       loop.dispose();
       ro?.disconnect();
       sound.stopMusic();
