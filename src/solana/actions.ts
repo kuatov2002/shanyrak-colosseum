@@ -51,7 +51,7 @@ export class SolanaActions {
     if (s.status === "success" || s.status === "error") this.track("onchain_action", { action: id, status: s.status });
   }
 
-  /** A prepared mint waiting for confirmation whose blockhash is about to expire. */
+  /** A prepared mint whose simulated amount and balance are too old to show as current. */
   stale(id: string): boolean {
     const st = this.get(id);
     return st.status === "ready" && isStale(st.prepared);
@@ -158,14 +158,14 @@ export class SolanaActions {
     const p = st.prepared;
     if (!p || st.status !== "ready" || !adapter) return;
     if (isStale(p)) {
-      // The blockhash is about to expire: re-simulate and let the player confirm the fresh amount.
+      // The shown amount is old: re-simulate and let the player confirm the fresh one.
       await this.prepareBadge(id);
       if (this.get(key).status === "ready") this.set(key, { message: "Данные сети обновились — проверьте сумму и подпишите ещё раз." });
       return;
     }
     this.set(key, { status: "awaiting-wallet", message: "Подтвердите транзакцию в кошельке." });
     try {
-      const signature = await executeMint(p, adapter, () => this.set(key, { status: "sending", message: "Отправляем и ждём подтверждения сети…" }));
+      const signature = await executeMint(p, adapter, () => this.set(key, { status: "sending", message: "Транзакция отправлена. Обычно сеть подтверждает её за 5–20 секунд…" }));
       this.store.mutate((s) => {
         delete s.wallet.pendingMints[id];
         s.wallet.minted[id] = { asset: p.asset, signature, at: Date.now() };

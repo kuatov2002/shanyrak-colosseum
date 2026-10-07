@@ -4,6 +4,7 @@
 // presses a button.
 
 import { getWallets } from "@wallet-standard/app";
+import bs58 from "bs58";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { Emitter } from "../core/emitter";
 import { SOLANA } from "./config";
@@ -29,6 +30,11 @@ export interface WalletAdapter {
   signMessage(message: Uint8Array): Promise<Uint8Array>;
   /** Signs a transaction and returns the fully signed wire bytes. */
   signTransaction(tx: SignableTx): Promise<Uint8Array>;
+  /**
+   * Signs AND broadcasts through the wallet's own infrastructure (better landing than a public RPC).
+   * Returns the base58 signature. Absent when the wallet does not offer it.
+   */
+  signAndSendTransaction?(tx: SignableTx): Promise<string>;
 }
 
 // ── Wallet Standard ────────────────────────────────────────────────────────
@@ -38,6 +44,11 @@ type DisconnectFeature = { disconnect(): Promise<void> };
 type SignMessageFeature = { signMessage(...inputs: { account: WalletAccount; message: Uint8Array }[]): Promise<{ signature: Uint8Array }[]> };
 type SignTxFeature = {
   signTransaction(...inputs: { account: WalletAccount; transaction: Uint8Array; chain?: string }[]): Promise<{ signedTransaction: Uint8Array }[]>;
+};
+type SignAndSendFeature = {
+  signAndSendTransaction(
+    ...inputs: { account: WalletAccount; transaction: Uint8Array; chain: string; options?: { preflightCommitment?: string; skipPreflight?: boolean; maxRetries?: number } }[]
+  ): Promise<{ signature: Uint8Array }[]>;
 };
 
 class StandardAdapter implements WalletAdapter {
@@ -78,6 +89,20 @@ class StandardAdapter implements WalletAdapter {
     });
     return out.signedTransaction;
   }
+  get signAndSendTransaction(): ((tx: SignableTx) => Promise<string>) | undefined {
+    if (!("solana:signAndSendTransaction" in this.wallet.features)) return undefined;
+    return async (tx: SignableTx) => {
+      if (!this.account) throw new Error("Кошелёк не подключён");
+      const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+      const [out] = await this.feature<SignAndSendFeature>("solana:signAndSendTransaction").signAndSendTransaction({
+        account: this.account,
+        transaction: bytes,
+        chain: SOLANA.chain,
+        options: { preflightCommitment: "confirmed", maxRetries: 5 },
+      });
+      return bs58.encode(out.signature);
+    };
+  }
 }
 
 // ── Legacy injected providers (window.phantom.solana, window.solflare, window.solana) ──
@@ -90,6 +115,7 @@ interface InjectedProvider {
   disconnect?(): Promise<void>;
   signMessage(msg: Uint8Array, display?: string): Promise<{ signature: Uint8Array } | Uint8Array>;
   signTransaction<T>(tx: T): Promise<T>;
+  signAndSendTransaction?<T>(tx: T, opts?: { preflightCommitment?: string; maxRetries?: number }): Promise<{ signature: string } | string>;
 }
 
 class InjectedAdapter implements WalletAdapter {
@@ -116,6 +142,14 @@ class InjectedAdapter implements WalletAdapter {
   async signTransaction(tx: SignableTx): Promise<Uint8Array> {
     const signed = await this.provider.signTransaction(tx);
     return signed.serialize({ requireAllSignatures: false, verifySignatures: false });
+  }
+  get signAndSendTransaction(): ((tx: SignableTx) => Promise<string>) | undefined {
+    const p = this.provider;
+    if (typeof p.signAndSendTransaction !== "function") return undefined;
+    return async (tx: SignableTx) => {
+      const res = await p.signAndSendTransaction!(tx, { preflightCommitment: "confirmed", maxRetries: 5 });
+      return typeof res === "string" ? res : res.signature;
+    };
   }
 }
 

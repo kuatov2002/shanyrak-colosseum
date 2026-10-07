@@ -12,7 +12,8 @@
 import badges from "./nft-badges.json";
 import { SOLANA } from "./config";
 import { rpc } from "./rpc";
-import type { SignableTx, WalletAdapter } from "./wallet";
+import type { TransactionInstruction } from "@solana/web3.js";
+import type { WalletAdapter } from "./wallet";
 
 export const MINTABLE_IDS = badges.badges.map((b) => b.id);
 
@@ -70,29 +71,42 @@ function base64Length(b64: string): number {
 
 // ── Prepare (simulate) → sign → send → confirm ─────────────────────────────
 
+/**
+ * Landing: CreateV1 uses ~9.3k compute units on mainnet (simulated), so a tight limit plus a fixed
+ * priority price costs ~0.000006 SOL and keeps the transaction from being dropped under load.
+ * Public RPCs report recent priority fees as 0, so a dynamic estimate would not help.
+ */
+export const MINT_CU_LIMIT = 12_000;
+export const MINT_CU_PRICE_MICROLAMPORTS = 500_000;
+
 export interface PreparedMint {
   id: string;
   name: string;
   uri: string;
   asset: string;
-  tx: SignableTx;
+  payer: string;
+  /** Compute budget + CreateV1. The transaction itself is rebuilt with a fresh blockhash at signing. */
+  instructions: TransactionInstruction[];
   rentLamports: number;
+  /** Total network fee: 2 signatures + priority. */
   feeLamports: number;
+  priorityLamports: number;
   balanceLamports: number;
   affordable: boolean;
-  blockhash: string;
+  /** Valid-until height of the blockhash the transaction was actually signed with. */
   lastValidBlockHeight: number;
   /** Simulation ran and succeeded (false when the payer cannot even cover the fee). */
   simulated: boolean;
+  unitsConsumed: number;
   logs: string[];
-  /** When the blockhash was fetched; a prepared mint older than ~45 s is re-simulated before signing. */
+  /** When the cost was simulated; older than PREPARED_TTL_MS is re-simulated so the amount stays honest. */
   preparedAt: number;
   /** Internal: the asset keypair (kept in memory only for this mint). */
   _assetSecret: Uint8Array;
 }
 
-/** A prepared mint goes stale long before its blockhash formally expires (~60–90 s). */
-export const PREPARED_TTL_MS = 45_000;
+/** The shown amount and balance are re-checked if the player waits longer than this before signing. */
+export const PREPARED_TTL_MS = 120_000;
 
 export function isStale(p: PreparedMint | undefined, now = Date.now()): boolean {
   return !!p && now - p.preparedAt > PREPARED_TTL_MS;
@@ -124,7 +138,7 @@ export async function prepareMint(owner: string, id: string): Promise<PreparedMi
   const core = new web3.PublicKey(SOLANA.coreProgramId);
   const asset = web3.Keypair.generate();
   const none = { pubkey: core, isSigner: false, isWritable: false };
-  const ix = new web3.TransactionInstruction({
+  const create = new web3.TransactionInstruction({
     programId: core,
     keys: [
       { pubkey: asset.publicKey, isSigner: true, isWritable: true },
@@ -138,25 +152,31 @@ export async function prepareMint(owner: string, id: string): Promise<PreparedMi
     ],
     data: Buffer.from(encodeCreateV1(badge.name, uri)),
   });
+  const instructions = [
+    web3.ComputeBudgetProgram.setComputeUnitLimit({ units: MINT_CU_LIMIT }),
+    web3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: MINT_CU_PRICE_MICROLAMPORTS }),
+    create,
+  ];
   const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
-  const tx = new web3.Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(ix);
-  const message = tx.compileMessage();
+  const message = new web3.Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(...instructions).compileMessage();
   const balanceLamports = await conn.getBalance(payer);
-  const feeLamports = (await conn.getFeeForMessage(message, "confirmed")).value ?? 5000;
+  const priorityLamports = Math.ceil((MINT_CU_LIMIT * MINT_CU_PRICE_MICROLAMPORTS) / 1_000_000);
+  const feeLamports = (await conn.getFeeForMessage(message, "confirmed")).value ?? 10_000 + priorityLamports;
 
   let size = estimateAssetSize(badge.name, uri);
   let simulated = false;
-  let logs: string[] = [];
+  let unitsConsumed = 0;
   const sim = await conn.simulateTransaction(new web3.VersionedTransaction(message), {
     sigVerify: false,
     replaceRecentBlockhash: true,
     commitment: "confirmed",
     accounts: { encoding: "base64", addresses: [asset.publicKey.toBase58()] },
   });
-  logs = sim.value.logs ?? [];
+  const logs = sim.value.logs ?? [];
   const errText = sim.value.err ? JSON.stringify(sim.value.err) : "";
   if (!sim.value.err) {
     simulated = true;
+    unitsConsumed = sim.value.unitsConsumed ?? 0;
     const acc = sim.value.accounts?.[0];
     if (acc?.data?.[0]) size = base64Length(acc.data[0]);
   } else if (!/AccountNotFound|InsufficientFunds|insufficient/i.test(errText + logs.join(" "))) {
@@ -169,44 +189,83 @@ export async function prepareMint(owner: string, id: string): Promise<PreparedMi
     name: badge.name,
     uri,
     asset: asset.publicKey.toBase58(),
-    tx,
+    payer: owner,
+    instructions,
     rentLamports,
     feeLamports,
+    priorityLamports,
     balanceLamports,
     affordable,
-    blockhash,
     lastValidBlockHeight,
     simulated,
+    unitsConsumed,
     logs,
     preparedAt: Date.now(),
     _assetSecret: asset.secretKey,
   };
 }
 
-/** Ask the wallet to sign, co-sign with the one-time asset key, send and wait for confirmation. */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Sign and send the mint, then wait for the network.
+ * 1. Fresh blockhash right before the wallet opens (time spent reading the cost does not age it).
+ * 2. Wallets with signAndSendTransaction (Phantom, Solflare…) broadcast through their own
+ *    infrastructure; the one-time asset key co-signs first (injected wallets accept pre-signed
+ *    transactions). Otherwise: the wallet signs, the asset key co-signs, the game sends and
+ *    re-broadcasts every 2 s until confirmed or the blockhash expires.
+ * 3. The asset account on chain is the ground truth for success.
+ */
 export async function executeMint(p: PreparedMint, adapter: WalletAdapter, onSending: () => void): Promise<string> {
   if (!p.affordable) throw new MintError("Недостаточно SOL для депозита и комиссии.", "funds");
   const web3 = await import("@solana/web3.js");
   const conn = await rpc.connection();
-  const signedBytes = await adapter.signTransaction(p.tx);
-  const tx = web3.Transaction.from(signedBytes);
-  tx.partialSign(web3.Keypair.fromSecretKey(p._assetSecret));
-  p._assetSecret.fill(0);
-  onSending();
-  const raw = tx.serialize();
-  const signature = await conn.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3, preflightCommitment: "confirmed" });
-  // Poll for confirmation (no websocket: works behind iframe/CSP restrictions)
-  const started = Date.now();
-  while (Date.now() - started < 90_000) {
-    const st = await conn.getSignatureStatuses([signature]);
-    const s = st.value[0];
-    if (s?.err) throw new MintError(`Транзакция отклонена сетью: ${JSON.stringify(s.err).slice(0, 100)}`, "program");
-    if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")) return signature;
-    const height = await conn.getBlockHeight("confirmed");
-    if (height > p.lastValidBlockHeight) {
-      throw new MintError("Транзакция не подтвердилась вовремя. Перед повтором игра сама проверит её в сети, ссылка на Explorer ниже.", "expired", signature);
+  const assetKey = web3.Keypair.fromSecretKey(p._assetSecret);
+  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+  p.lastValidBlockHeight = lastValidBlockHeight;
+  const tx = new web3.Transaction({ feePayer: new web3.PublicKey(p.payer), blockhash, lastValidBlockHeight }).add(...p.instructions);
+
+  let signature: string;
+  let raw: Uint8Array | null = null;
+  try {
+    if (adapter.signAndSendTransaction) {
+      tx.partialSign(assetKey);
+      signature = await adapter.signAndSendTransaction(tx);
+      onSending();
+    } else {
+      const signed = web3.Transaction.from(await adapter.signTransaction(tx));
+      signed.partialSign(assetKey);
+      raw = signed.serialize();
+      onSending();
+      signature = await conn.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 0, preflightCommitment: "confirmed" });
     }
-    await new Promise((r) => setTimeout(r, 1800));
+  } finally {
+    p._assetSecret.fill(0);
+  }
+
+  // Poll (no websocket: works behind iframe/CSP restrictions), re-broadcasting our own send.
+  const assetPk = new web3.PublicKey(p.asset);
+  const landed = async () => {
+    const acc = await conn.getAccountInfo(assetPk, "confirmed").catch(() => null);
+    return !!acc && acc.owner.toBase58() === SOLANA.coreProgramId;
+  };
+  const started = Date.now();
+  let lastSend = Date.now();
+  for (let i = 0; Date.now() - started < 150_000; i++) {
+    await sleep(i === 0 ? 1200 : 1600);
+    const s = (await conn.getSignatureStatuses([signature])).value[0];
+    if (s?.err) throw new MintError(`Транзакция отклонена сетью: ${JSON.stringify(s.err).slice(0, 100)}. Списана только комиссия сети.`, "program");
+    if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")) return signature;
+    if (i % 3 === 2 && (await landed())) return signature;
+    if (raw && Date.now() - lastSend > 2000) {
+      lastSend = Date.now();
+      void conn.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => undefined);
+    }
+    const height = await conn.getBlockHeight("confirmed");
+    if (height > lastValidBlockHeight) {
+      if (await landed()) return signature;
+      throw new MintError("Сеть не включила транзакцию в блок, и её срок действия истёк. Значок не создан, депозит не списан. Можно повторить.", "expired", signature);
+    }
   }
   throw new MintError("Подтверждение затянулось. Перед повтором игра сама проверит транзакцию в сети, ссылка на Explorer ниже.", "expired", signature);
 }

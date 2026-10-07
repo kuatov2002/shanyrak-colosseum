@@ -23,11 +23,6 @@ export const SOLANA = {
   rpcTimeoutMs: 8000,
   /** Metaplex Core program. */
   coreProgramId: "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
-  /**
-   * Project treasury for FUTURE fees. Not used by any action in this build — no transfer to it
-   * exists in the code, and treasury keys must never be shipped in the client.
-   */
-  treasury: null as string | null,
   explorerTx(sig: string): string {
     return `https://explorer.solana.com/tx/${sig}`;
   },

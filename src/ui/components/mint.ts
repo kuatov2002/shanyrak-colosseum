@@ -31,7 +31,7 @@ export function openMintDialog(app: App, id: string): void {
             h("div", null, h("span", null, "Возвратный депозит за хранение (rent)"), h("b", null, fmtSol(p.rentLamports))),
             h("small.muted", null, "Лежит на аккаунте значка. Почти весь возвращается, если значок сжечь (burn)."),
             h("div", null, h("span", null, "Комиссия сети"), h("b", null, fmtSol(p.feeLamports))),
-            h("small.muted", null, "Платится валидаторам Solana и не возвращается."),
+            h("small.muted", null, `Платится валидаторам Solana и не возвращается. Включает приоритет ${fmtSol(p.priorityLamports)}, чтобы транзакция не потерялась в загруженной сети.`),
             h("div.total", null, h("span", null, "Итого спишется сейчас"), h("b", null, fmtSol(p.rentLamports + p.feeLamports))),
             h("small.muted", null, `На кошельке: ${fmtSol(p.balanceLamports)} · транзакция проверена симуляцией в mainnet`),
           ),
@@ -75,7 +75,7 @@ export function openMintDialog(app: App, id: string): void {
     });
     observer.observe(document.body, { childList: true });
     render();
-    // Re-opened after a while: a "ready" transaction may carry an expiring blockhash, simulate again.
+    // Re-opened after a while: re-simulate so the shown amount and balance are current.
     const st = app.actions.get(key).status;
     if (st === "idle" || st === "error" || st === "success" || app.actions.stale(key)) void app.actions.prepareBadge(id);
   });
@@ -83,9 +83,9 @@ export function openMintDialog(app: App, id: string): void {
 
 export function mintAvailability(app: App, id: string): { can: boolean; reason: string } {
   const d = app.store.data;
-  if (d.wallet.minted[id]) return { can: false, reason: "Уже сминчен" };
+  if (d.wallet.minted[id]) return { can: false, reason: "Уже выпущен" };
   if (!d.achievements[id]) return { can: false, reason: "Сначала получите достижение" };
-  if (!metadataBase()) return { can: false, reason: "Минт доступен в опубликованной на iDos версии" };
+  if (!metadataBase()) return { can: false, reason: "Работает в опубликованной версии на iDos" };
   if (!app.wallet.address) return { can: false, reason: "Подключите кошелёк" };
   return { can: true, reason: "" };
 }
