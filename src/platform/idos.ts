@@ -1,10 +1,12 @@
 // iDos Games backend for title JE8W0Z54 via the official SDK (@idosgames/core 0.21.2).
-// Used for: silent guest (device-id) login, server-authoritative leaderboards and custom
-// analytics events. Every call is best-effort: on any failure the game keeps running offline.
+// Used for: sign-in (wallet, iDos SSO, e-mail, Telegram, guest), server-authoritative leaderboards
+// and custom analytics events. Every call is best-effort: on any failure the game keeps running offline.
 //
 // SDK calls used here (verified against the package's type definitions):
 //   createIDosGamesClient({ titleID, throttleMs })
-//   client.auth.autoLogin() / client.auth.loginWithDeviceID() / client.auth.context?.userID
+//   client.auth.autoLogin() / readSsoCodeFromUrl() / loginWithSsoCode() / beginSsoRedirect()
+//   client.auth.loginWithEmail() / registerWithEmail() / confirmEmailRegistration() / forgotPassword()
+//   client.auth.loginWithTelegram() / loginWithDeviceID() / setRememberSession() / context?.userID
 //   client.leaderboard.submitScore(id, score) / client.leaderboard.getLeaderboard(id)
 //   client.user.changeUsername(name)
 //   client.auth.linkWallet(address, "solana", signature?)  (two-step challenge → signature)
@@ -114,7 +116,7 @@ export class IdosBackend implements Backend {
     }
   }
 
-  /** Backend interface: connect = resume (there is no silent guest any more). */
+  /** Backend interface: connect = resume (never creates a guest by itself). */
   async connect(): Promise<{ ok: boolean; error?: string }> {
     const res = await this.resume();
     return res.ok ? { ok: true } : { ok: false, error: res.error };

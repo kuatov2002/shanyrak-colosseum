@@ -1,7 +1,7 @@
 # Judges' guide · Гид для судей
 
-Everything below works in a normal desktop or mobile browser. **No wallet is needed for steps 1–5.**
-Всё ниже работает в обычном браузере; **для шагов 1–5 кошелёк не нужен.**
+Everything below works in a normal desktop or mobile browser. **No wallet is needed for steps 1–6**: at step 1 choose e-mail or «Играть гостем».
+Всё ниже работает в обычном браузере; **для шагов 1–6 кошелёк не нужен**: на шаге 1 выберите почту или «Играть гостем».
 
 Open the game on its own domain: **https://je8w0z54.idos.games/**. The platform page https://idosgames.com/app/JE8W0Z54/ embeds the same build in an iframe, but browser wallets may be unavailable inside frames.
 
@@ -9,12 +9,13 @@ Open the game on its own domain: **https://je8w0z54.idos.games/**. The platform 
 
 | # | Do | What to notice |
 |---|---|---|
-| 1 | The game opens straight into the **tutorial** (5 floors, ~30 s). Tap / click / `Space` when the room is above the tower. | One-button control, «ИДЕАЛЬНО!», combo, hints that explain stability and helmets, the shanyrak descending at floor 5. |
-| 2 | Pick any faculty. On the hub a short **"how the campus works"** guide opens. | Plain-language onboarding; "? Как играть" brings it back any time. |
-| 3 | Press **▶ Играть** (quick tower). Build 8+ floors. | Combo ×5 → **Шабыт** (tower glows), bonus cards at floor 5, neighbour synergies, events, the "crown with shanyrak (+25%)" button from floor 8. `Esc` pauses. |
-| 4 | Keep building past floor 7–10, or open **☰ Все режимы → Семестр** (8 short missions, unlocked one by one). | Random events change the rules: mountain wind, deadline shake, exam, Nauryz (fireworks, bonfires, festive music), session night, student festival. |
-| 5 | **Рейтинг**. | Online iDos leaderboards (day, height, week, faculties). Demo rivals are labelled and never ranked. |
-| 6 | *(optional, mainnet)* **Кошелёк** → connect Phantom / Solflare → **Выпустить** the «Первая башня» badge (earned in the tutorial). | The mint is simulated on mainnet first; the dialog shows rent (≈ 0.00174 SOL, refundable), fee (0.000016 SOL incl. priority) and the total before the wallet opens. After signing: status → Explorer link → "✅ В кошельке". Without SOL the dialog says how much is needed and returns you to the game. |
+| 1 | The first screen is **sign-in**: **◎ Войти кошельком Solana**, **Войти через iDos Games**, **✉ Войти по почте**, or **Играть гостем**. | The wallet only signs a free message: no transaction, no fee, no password, and the wallet becomes the account. Launched from idosgames.com, you are signed in with your iDos account automatically. On a phone browser without a wallet the screen offers to reopen the game in Phantom or Solflare. «Запомнить меня» restores the session next time. |
+| 2 | The **tutorial** follows (5 floors, ~30 s). Tap / click / `Space` when the room is above the tower. | One-button control, «ИДЕАЛЬНО!», combo, hints that explain stability and helmets, the shanyrak descending at floor 5. |
+| 3 | Pick any faculty. On the hub a short **"how the campus works"** guide opens. | Plain-language onboarding; "? Как играть" brings it back any time. **Профиль** shows which account you are signed in with; a guest sees «Гость · Войти» in the top bar. |
+| 4 | Press **▶ Играть** (quick tower). Build 8+ floors. | Combo ×5 → **Шабыт** (tower glows), bonus cards at floor 5, neighbour synergies, events, the "crown with shanyrak (+25%)" button from floor 8. `Esc` pauses. |
+| 5 | Keep building past floor 7–10, or open **☰ Все режимы → Семестр** (8 short missions, unlocked one by one). | Random events change the rules: mountain wind, deadline shake, exam, Nauryz (fireworks, bonfires, festive music), session night, student festival. |
+| 6 | **Рейтинг**. | Online iDos leaderboards (day, height, week, faculties) under your account name. Demo rivals are labelled and never ranked. |
+| 7 | *(optional, mainnet)* **Кошелёк** (already connected if you signed in with it) → **Выпустить** the «Первая башня» badge (earned in the tutorial). | The mint is simulated on mainnet first; the dialog shows rent (≈ 0.00174 SOL, refundable), fee (0.000016 SOL incl. priority) and the total before the wallet opens. After signing: status → Explorer link → "✅ В кошельке". Without SOL the dialog says how much is needed and returns you to the game. |
 
 ## Where to look in the code
 
@@ -25,7 +26,8 @@ Open the game on its own domain: **https://je8w0z54.idos.games/**. The platform 
 | Badge mint (Metaplex Core) | `src/solana/nft.ts` (encode, simulate, sign & send, confirm), `src/solana/actions.ts` (statuses, pending-mint safety) |
 | RPC pool | `src/solana/rpc.ts` — failover on 403/429/5xx/timeouts, ≥ 200 ms between requests per endpoint |
 | Wallets | `src/solana/wallet.ts` — Wallet Standard + injected providers, `signAndSendTransaction` when available |
-| iDos backend | `src/platform/idos.ts` — guest auth, leaderboards, analytics, `auth.linkWallet` |
+| Sign-in | `src/ui/screens/login.ts` (the screen), `src/platform/account.ts` (wallet sign-in via `@idosgames/wallet`, SSO availability, phone deep links, error texts), `src/platform/idos.ts` `resume()` (SSO code → remembered session) |
+| iDos backend | `src/platform/idos.ts` — accounts, leaderboards (spaced request queue), analytics, `auth.linkWallet` |
 | Tests | `tests/*.test.ts` — `npm test` |
 
 ## Verify a badge on chain

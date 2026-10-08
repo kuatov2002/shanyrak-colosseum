@@ -1,7 +1,7 @@
 // The game as a mountable unit: mountGame(host) builds the app context, wires round ↔ renderer ↔
 // audio ↔ UI and starts the loop. src/main.ts mounts it on the page; an iDos module mounts it from
-// EngineScene.mount(ctx.host) (see idos/shanyrak). First launch goes straight into the 30-second
-// tutorial; no wallet, no login screen.
+// EngineScene.mount(ctx.host) (see idos/shanyrak). First launch opens the sign-in screen (wallet,
+// iDos Games, e-mail or guest), then the 30-second tutorial.
 
 import "./styles.css";
 import "./ui/theme.css";

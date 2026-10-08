@@ -6,8 +6,8 @@
 Одной кнопкой вы сбрасываете с крана комнаты студенческого кампуса — общагу, чайхану, библиотеку, IT-лабораторию и другие. Чем ровнее легла комната, тем больше комбо, студентов и $SHAI. Каждый раунд заканчивается тем, что башню венчает **шанырак** — символ завершённого дома и общности.
 
 - Понятно за 3 секунды: одно действие — «нажми, когда комната над башней».
-- Работает без кошелька и без интернета. Solana подключается только по желанию.
-- Бэкенд — тайтл iDos **JE8W0Z54**: гостевой вход, серверные лидерборды и аналитика.
+- Вход в одно касание: кошельком Solana (бесплатная подпись, без транзакции и пароля), аккаунтом idosgames.com, по почте или гостем. Без кошелька и без интернета игра тоже работает.
+- Бэкенд — тайтл iDos **JE8W0Z54**: аккаунты, серверные лидерборды и аналитика.
 
 ---
 
@@ -22,13 +22,27 @@
 ```bash
 npm install
 npm run dev        # http://localhost:5190
-npm test           # 27 тестов: раунды, детерминизм дня, миссии, сохранения, экономика, RPC-пул, минт
+npm test           # 29 тестов: раунды, детерминизм дня, миссии, сохранения, экономика, лидерборды, RPC-пул, минт
 npm run build      # tsc + vite → dist/ (относительные пути, подходит для iDos)
 ```
 
 Переменные окружения необязательны (см. `.env.example`): `VITE_IDOS_TITLE_ID` (по умолчанию `JE8W0Z54`), `VITE_IDOS_ENV`, `VITE_SOLANA_RPC` (основной RPC mainnet-beta; резервные endpoint подключаются автоматически).
 
 Стек: **TypeScript + Vite + PixiJS 8 (WebGL)**, меню на DOM без фреймворков. Экран раунда целиком рисует Pixi: мир, HUD, карточки бонусов и частицы. DOM остаётся только для модалок паузы и для live-области скринридера. Физика аркадная и своя, логика отделена от рендера. Весь арт, иконки и звук процедурные: формы один раз запекаются в GPU-текстуры, дальше их компонует, анимирует и фильтрует WebGL. Из внешнего — только два шрифта под SIL OFL (Rubik и Montserrat Alternates, с казахскими буквами), они лежат в репозитории.
+
+## Вход
+
+При первом запуске открывается экран входа — те же варианты, что в шаблоне хоста iDos:
+
+| Способ | Как работает |
+|---|---|
+| **◎ Кошелёк Solana** | Phantom, Solflare, Backpack (Wallet Standard) подписывают сообщение-challenge iDos через `@idosgames/wallet`. Это бесплатно: транзакции и комиссии нет, пароля тоже. Кошелёк становится аккаунтом и сразу считается привязанным к профилю. Внутри idosgames.com подписывает кошелёк сайта. В мобильном браузере без кошелька экран предлагает открыть игру в приложении Phantom или Solflare |
+| **iDos Games** | Единый вход (SSO): переход на idosgames.com и возврат с одноразовым кодом. Если игра запущена с платформы, вход происходит сам |
+| **Почта** | Вход по паролю, регистрация с кодом из письма, сброс пароля |
+| **Telegram** | Только внутри Mini App |
+| **Гость** | Одно касание, профиль привязан к устройству. Гостю раз в сутки, только на главном экране, предлагают закрепить прогресс за аккаунтом |
+
+«Запомнить меня» сохраняет сессию: при следующем запуске вход восстанавливается сам. Если сессия закончилась, игра попросит войти снова на главном экране, но не посреди раунда. Сменить аккаунт можно в Профиле.
 
 ## Как играть
 
@@ -83,12 +97,13 @@ npm run build      # tsc + vite → dist/ (относительные пути, 
 
 ## Где Solana (`src/solana/`) — только mainnet-beta
 
-Гостевой режим включён по умолчанию. Кошелёк ненавязчиво предлагается только после нескольких настоящих раундов (не после обучения), игра им ничего не блокирует. Solana используется ровно для трёх добровольных вещей. **Лидерборды в Solana не пишутся**: они off-chain, на iDos (`client.leaderboard.submitScore`).
+Кошелёк — самый простой способ войти, но не обязательный: рядом на экране входа есть iDos Games, почта и «Играть гостем», и без кошелька игра ничего не блокирует. Всё, что связано с Solana, запускается только кнопкой игрока. **Лидерборды в Solana не пишутся**: они off-chain, на iDos (`client.leaderboard.submitScore`).
 
 | Что | Как реализовано | Статус |
 |---|---|---|
 | Подключение кошелька | Wallet Standard (`@wallet-standard/app`: Phantom, Solflare, Backpack…) + запасные injected-провайдеры, chain `solana:mainnet` | ✅ реально |
-| Привязка кошелька к профилю iDos | `client.auth.linkWallet(address, "solana")` → challenge → `signMessage` в кошельке → hex-подпись → `linkWallet(…, signature)`. Сервер iDos проверяет подпись, транзакции нет | ✅ реально (требует онлайн-входа iDos) |
+| Вход кошельком | `@idosgames/wallet` `loginWithWalletSolana`: challenge iDos → `signMessage` в кошельке → сервер iDos проверяет подпись и выдаёт сессию. Внутри idosgames.com — `loginWithWalletViaPlatform`. Транзакции нет. Вход кошельком включён в конфиге блокчейна тайтла | ✅ реально |
+| Привязка кошелька к профилю iDos (для входа по почте, iDos Games, гостем) | `client.auth.linkWallet(address, "solana")` → challenge → `signMessage` в кошельке → hex-подпись → `linkWallet(…, signature)`. Сервер iDos проверяет подпись, транзакции нет | ✅ реально (требует онлайн-входа iDos) |
 | Значки-NFT за 4 достижения | Standalone **Metaplex Core**-ассет (`CreateV1`, без коллекции) + Compute Budget (лимит 12 000 CU, приоритет 0.000006 SOL). Подписывают игрок (payer/owner/update authority) и одноразовая keypair ассета, которая живёт только в памяти браузера. Перед подписью транзакция **симулируется в mainnet** (≈9 300 CU), игрок видит точный депозит (rent ≈ 0.00174 SOL, возвращается при сжигании) и комиссию (≈ 0.000016 SOL). Блокхеш берётся свежим прямо перед окном кошелька; кошельки с `signAndSendTransaction` (Phantom, Solflare) отправляют транзакцию сами, иначе игра шлёт и повторяет отправку до подтверждения; успех проверяется по аккаунту ассета | ✅ реально; проверено симуляцией в mainnet |
 | Метаданные NFT | `nft/<id>.json` и `nft/<id>.png` в билде по **версионированному** пути CDN iDos (`…/v/<buildId>/nft/…`): при сборке с `--base=<AssetBase>` URI неизменны для этой версии | ✅ |
 | Токен $SHAI | Mint `AQWXMcm2Km4kNz6sd4Ec3gf251DswN7KiGw1Mq3Bidos` (mainnet, SPL Token, 6 decimals) из конфига тайтла iDos. Баланс читается без индексных RPC-вызовов: mint → ATA → `getParsedAccountInfo` | ✅ только чтение |
@@ -101,10 +116,10 @@ npm run build      # tsc + vite → dist/ (относительные пути, 
 ## iDos Games (тайтл JE8W0Z54)
 
 `src/platform/idos.ts` работает через официальный SDK `@idosgames/core@0.21.2`. Используемые методы сверены с `.d.ts` пакета:
-- `createIDosGamesClient({ titleID })`, затем `auth.autoLogin()` и, если нужно, `auth.loginWithDeviceID()` для тихого гостевого входа;
+- `createIDosGamesClient({ titleID })`; вход: `readSsoCodeFromUrl` / `loginWithSsoCode` / `beginSsoRedirect` (iDos Games), `autoLogin` + `setRememberSession` (запомненная сессия), `loginWithEmail` / `registerWithEmail` / `confirmEmailRegistration` / `forgotPassword` / `resetPassword`, `loginWithTelegram`, `loginWithDeviceID` (гость, только по кнопке);
 - `leaderboard.submitScore / getLeaderboard`: доски `daily_tower` (Daily, BestScore), `best_height` (Never, BestScore), `weekly_score` (Weekly, Sum), `faculty_tulpar|barys|burkit|dombyra|zhuldyz` (Weekly, Sum);
 - `user.changeUsername`: имя игрока в таблицах;
-- `analytics.logEvent`: события `round_start`, `round_end`, `bonus_pick`, `perfect_streak`, `tutorial_done`, `wallet_connect`, `onchain_action`, `purchase_soft`, `screen_view`.
+- `analytics.logEvent`: события `login`, `round_start`, `round_end`, `bonus_pick`, `perfect_streak`, `tutorial_done`, `wallet_connect`, `onchain_action`, `purchase_soft`, `screen_view`.
 
 Если iDos недоступен или в Настройках выключено «Онлайн-рейтинги», `LocalBackend` переводит игру в оффлайн. Лидерборды тогда показывают ваш результат среди **подписанных** демо-соперников с объяснением.
 
@@ -114,7 +129,7 @@ npm run build      # tsc + vite → dist/ (относительные пути, 
 
 ## Что работает и что заглушка
 
-**Работает:** весь игровой цикл (кран, падение, оценка, комбо и Шабыт, устойчивость, крен, обрушение, каски, шанырак); 12 комнат с соседствами; 6 событий; 10 бонусов; 5 режимов и 8 миссий; детерминированная ежедневная башня; мета (улучшения, магазин, крафт, коллекция с надеванием косметики); дневные и недельные задания, серия входов, сезон, достижения; факультеты; онлайн-лидерборды iDos; аналитика; Solana mainnet: кошелёк, привязка к профилю iDos, минт значков Metaplex Core с симуляцией и чтение баланса $SHAI через пул RPC; WebGL-рендер на PixiJS; процедурные звук и музыка; версионированные сохранения; адаптив под телефон и десктоп.
+**Работает:** весь игровой цикл (кран, падение, оценка, комбо и Шабыт, устойчивость, крен, обрушение, каски, шанырак); 12 комнат с соседствами; 6 событий; 10 бонусов; 5 режимов и 8 миссий; детерминированная ежедневная башня; мета (улучшения, магазин, крафт, коллекция с надеванием косметики); дневные и недельные задания, серия входов, сезон, достижения; факультеты; вход кошельком, через iDos Games, по почте, Telegram или гостем; онлайн-лидерборды iDos; аналитика; Solana mainnet: кошелёк, вход подписью, привязка к профилю iDos, минт значков Metaplex Core с симуляцией и чтение баланса $SHAI через пул RPC; WebGL-рендер на PixiJS; процедурные звук и музыка; версионированные сохранения; адаптив под телефон и десктоп.
 
 **Заглушки и симуляции (помечены в интерфейсе):**
 - демо-соперники в таблицах, пока онлайн-таблица пустая или нет сети (строки «демо», в рейтинге не участвуют);
@@ -125,7 +140,7 @@ npm run build      # tsc + vite → dist/ (относительные пути, 
 
 1. **$SHAI ончейн.** Начислять награды раунда на сервере (iDos CloudCode, проверка результата) в `Main_IOU`, а вывод делать через блокчейн-модуль iDos (`client.blockchain`: withdrawal/deposit токена `Main` в сети `solana`). Decimals токена `Main` в конфиге iDos (0) защищены платформой и не меняются через MCP — см. [KNOWN_ISSUES](KNOWN_ISSUES.md).
 2. **NFT-коллекция.** Сейчас значки — standalone Core-ассеты. Проверяемая коллекция требует подписи collection authority: её стоит выдавать serverless-подписчиком (CloudCode/функция), а не ключом в бандле. Косметику с `onchain: true` минтить тем же путём.
-3. **Рейтинг по кошелькам.** Кошелёк уже привязывается к профилю iDos (`auth.linkWallet`), поэтому таблицы iDos можно показывать с адресом. Лидерборды при этом остаются off-chain.
+3. **Рейтинг по кошелькам.** Кошелёк уже служит аккаунтом или привязан к профилю iDos (`auth.linkWallet`), поэтому таблицы iDos можно показывать с адресом. Лидерборды при этом остаются off-chain.
 4. **Облачные сохранения.** Реализовать `SaveStore` (`src/core/save.ts`) поверх iDos UserCustomData. Интерфейс уже отделён от localStorage.
 
 ## Архитектура
@@ -139,20 +154,20 @@ src/
   economy/     shai · shop · crafting
   retention/   daily · weekly · season · quests (+ достижения)
   social/      faculties (война) · leaderboards
-  platform/    backend (интерфейс + оффлайн) · idos (SDK)
+  platform/    backend (интерфейс + оффлайн) · idos (SDK, вход, очередь запросов) · account (вход кошельком, SSO, тексты ошибок)
   solana/      config · rpc (пул с failover) · wallet · token · nft (Metaplex Core) · nftArt · actions
   render/      world (PixiJS-рендерер) · blockView · roomExtras · textures (запекание) · warmGrade (свой GLSL-фильтр)
                characters (векторный риг студентов) · hud/ (Pixi HUD: button · hud · fonts) · rooms · shanyrak · sky
                glyphs (значки комнат) · color · menuScene
-  design/      skin (общая 9-slice дизайн-система для Pixi и CSS border-image) · glyphs (единый набор иконок:
+  design/      skin (запечённые текстуры стиля «Кийіз»: кнопки, войлок, медальоны — общие для Pixi и CSS) · glyphs (единый набор иконок:
                текстуры для HUD и inline SVG для меню) · icons
   visuals/     particles (ParticleContainer, общий атлас)
   audio/       sound (шины, ревербератор, лимитер) · dsp (домбра Karplus–Strong) · music (3 темы × 2 интенсивности)
                voices (слоистые эффекты, барабан, шейкер, голоса толпы)
   analytics/   events
-  ui/          app (роутер) · dom · components/ · screens/ (12 экранов + модальные окна)
+  ui/          app (роутер) · dom · theme.css («Кийіз») · components/ · screens/ (13 экранов, включая вход, + модальные окна)
   game.ts      mountGame(host) · main.ts — точка входа страницы
-tests/         round.test.ts · meta.test.ts
+tests/         round · meta · leaderboards · solana · mint-safety · mint-exec
 idos/          шаблон модуля для хоста iDos
 ```
 
