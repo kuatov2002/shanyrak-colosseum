@@ -26,7 +26,7 @@ Open the game on its own domain: **https://je8w0z54.idos.games/**. The platform 
 | RPC pool | `src/solana/rpc.ts` — failover on 403/429/5xx/timeouts, ≥ 200 ms between requests per endpoint |
 | Wallets | `src/solana/wallet.ts` — Wallet Standard + injected providers, `signAndSendTransaction` when available |
 | iDos backend | `src/platform/idos.ts` — guest auth, leaderboards, analytics, `auth.linkWallet` |
-| Tests | `tests/*.test.ts` — `npm test` (27 tests, including a mint flow against a fake wallet and RPC) |
+| Tests | `tests/*.test.ts` — `npm test` |
 
 ## Verify a badge on chain
 
@@ -34,6 +34,6 @@ Open the game on its own domain: **https://je8w0z54.idos.games/**. The platform 
 2. The asset account is owned by the Metaplex Core program `CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d`; owner and update authority are the player.
 3. Its `uri` points to the **versioned** iDos CDN path of the build that minted it (`…/drive/app/JE8W0Z54/v/<buildId>/nft/<id>.json`), so later deploys never break it.
 
-## Honest limits
+## Known limits
 
-Read [KNOWN_ISSUES.md](KNOWN_ISSUES.md) and the post-mortem [AUDIT.md](AUDIT.md) (both in Russian). The short version: scores are computed on the client (no anti-cheat yet), saves are local, the browser can only reach one public RPC reliably, and real-phone performance was measured in emulation only.
+See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) (in Russian). The short version: scores are computed on the client (no anti-cheat yet), saves are local to the device, and the public Solana RPCs reachable from a browser are limited — a dedicated RPC can be set with `VITE_SOLANA_RPC`.

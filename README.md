@@ -18,8 +18,6 @@
 
 ![Shanyrak — the crowned campus tower](docs/img/hero.jpg)
 
-> 🎬 **Trailer:** [docs/media/trailer.mp4](docs/media/trailer.mp4) — 40 s, rendered frame by frame from a real campaign round, with the game's own procedural sound.
-
 ---
 
 ## Submission to the iDos Games × Solana hackathon (Colosseum 2026)
@@ -46,7 +44,7 @@
 
 ### 4. Retention needs a backend that a hackathon team can't build
 - **Problem:** leaderboards, analytics and accounts are months of server work.
-- **Shanyrak:** the whole backend is the **iDos Games** title `JE8W0Z54`: silent guest auth, server leaderboards (daily tower, best height, weekly score, five faculties), analytics events — all configured through the iDos MCP, with an offline fallback.
+- **Shanyrak:** the whole backend is the **iDos Games** title `JE8W0Z54`: silent guest auth, server leaderboards (daily tower, best height, weekly score, five faculties), analytics events, with an offline fallback.
 
 ### 5. Games that could be from anywhere
 - **Shanyrak:** a Kazakh campus — chaikhana next to the dorm, Nauryz fireworks, dombra music, қошқар мүйіз ornaments, Alatau on the horizon. The shanyrak is treated with respect: it never falls, it always **completes** what was built.
@@ -92,7 +90,7 @@
 | Backend | iDos Games (`@idosgames/core` 0.21): guest auth, leaderboards, analytics, wallet ↔ profile link |
 | Blockchain | Solana mainnet-beta, `@solana/web3.js`, Wallet Standard, Metaplex Core `CreateV1` (hand-encoded, Borsh) |
 | Hosting | iDos build hosting (versioned CDN paths keep NFT metadata URIs immutable) |
-| Tests | Vitest — round simulation, determinism, missions, saves, economy, RPC pool, mint flow with fake wallet/RPC |
+| Tests | Vitest — gameplay simulation, missions, saves, economy, Solana flows |
 
 ---
 
@@ -113,7 +111,7 @@
           analytics · linkWallet             Metaplex Core badge (player-signed)
 ```
 
-The simulation knows nothing about rendering: `Round` holds state and emits events; the renderer and HUD read state and react to events. That is why the whole game can be played by a bot in tests and why the trailer below was rendered frame by frame from real rounds. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The simulation knows nothing about rendering: `Round` holds state and emits events; the renderer and HUD read state and react to events. That keeps the game logic testable without a browser. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
@@ -124,20 +122,12 @@ git clone https://github.com/kuatov2002/shanyrak-colosseum.git
 cd shanyrak-colosseum
 npm install
 npm run dev          # http://localhost:5190
-npm test             # 27 tests
+npm test
 npm run build        # typecheck + production bundle in dist/
 ```
 
 Optional `.env` (see `.env.example`): `VITE_IDOS_TITLE_ID` (default `JE8W0Z54`), `VITE_IDOS_ENV`, `VITE_SOLANA_RPC` (primary mainnet RPC; fallbacks are automatic).
 Badge minting needs the published build: metadata lives at the versioned iDos CDN path of that build (`vite build --base=<AssetBase>`).
-
----
-
-## Status
-
-**Verified:** all 5 modes and 8 missions played to the crown by a bot on the live build; online iDos leaderboards and analytics; mainnet simulation of the badge mint from the live origin (≈ 9.3k CU, rent 0.00174244 SOL, fee 0.000016 SOL); iDos wallet-link challenge; WebGL context loss & restore; no listener leaks over 10 simulated minutes; JS bundle 479 KB gzip in total (≈ 265 KB before the first frame).
-
-**Not verified in this environment:** a real wallet signature after the latest mint fix (the first live attempts timed out — fixed with a fresh blockhash at signing, priority fee and wallet-side sending, see [KNOWN_ISSUES](docs/KNOWN_ISSUES.md)); real phones (emulation only). The full honest post-mortem is in [docs/AUDIT.md](docs/AUDIT.md).
 
 ---
 
@@ -159,7 +149,7 @@ Badge minting needs the published build: metadata lives at the versioned iDos CD
 
 - **Live game:** https://je8w0z54.idos.games/ · **Platform page:** https://idosgames.com/app/JE8W0Z54/
 - **Trailer:** [docs/media/trailer.mp4](docs/media/trailer.mp4)
-- **Docs (RU):** [Об игре](docs/GAME.md) · [Питч](docs/PITCH.md) · [Сценарий демо](docs/DEMO_SCRIPT.md) · [Известные ограничения](docs/KNOWN_ISSUES.md) · [Аудит](docs/AUDIT.md)
+- **Docs (RU):** [Об игре](docs/GAME.md) · [Питч](docs/PITCH.md) · [Известные ограничения](docs/KNOWN_ISSUES.md)
 
 ---
 

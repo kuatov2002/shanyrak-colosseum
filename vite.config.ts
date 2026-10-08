@@ -66,49 +66,11 @@ function badgeExport(): Plugin {
   };
 }
 
-/**
- * Dev-only sink for the trailer renderer (scripts/trailer): POST /__trailer/frame?n=<index> with a
- * JPEG body and POST /__trailer/audio with a WAV body write into .trailer/ (git-ignored), where
- * ffmpeg turns them into docs/media/trailer.mp4 (see scripts/trailer/README.md).
- */
-function trailerSink(): Plugin {
-  return {
-    name: "shanyrak-trailer-sink",
-    apply: "serve",
-    configureServer(server) {
-      server.middlewares.use("/__trailer", (req, res) => {
-        const url = new URL(req.url ?? "", "http://x");
-        const n = Number(url.searchParams.get("n"));
-        const kind = url.pathname.replace(/^\//, "");
-        const target =
-          kind === "frame" && Number.isInteger(n) && n >= 0 && n < 100000
-            ? `.trailer/frames/${String(n).padStart(5, "0")}.jpg`
-            : kind === "audio"
-              ? ".trailer/audio.wav"
-              : null;
-        if (req.method !== "POST" || !target) {
-          res.statusCode = 400;
-          res.end("bad request");
-          return;
-        }
-        const chunks: Buffer[] = [];
-        req.on("data", (c: Buffer) => chunks.push(c));
-        req.on("end", async () => {
-          const { mkdir, writeFile } = await import("node:fs/promises");
-          await mkdir(".trailer/frames", { recursive: true });
-          await writeFile(target, Buffer.concat(chunks));
-          res.end("ok");
-        });
-      });
-    },
-  };
-}
-
 // Relative base by default: the same build runs on localhost and on {titleid}.idos.games.
 // For an iDos release pass the version's AssetBase: `vite build --base=<AssetBase>`.
 export default defineConfig({
   base: "./",
-  plugins: [nftMetadata(), badgeExport(), trailerSink()],
+  plugins: [nftMetadata(), badgeExport()],
   server: { port: 5190, host: true },
   build: {
     target: "es2022",

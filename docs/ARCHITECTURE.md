@@ -22,7 +22,7 @@ src/
   ui/          router · DOM helpers · components (dialogs, guide, mint) · screens (hub, round, result, wallet…)
   game.ts      mountGame(host) — wires everything; main.ts mounts it on the page
 tests/         vitest: round, meta, solana (RPC pool, CreateV1 encoding, migrations), mint safety, mint execution
-scripts/       export-badges.md (badge art), trailer/ (offline trailer renderer)
+scripts/       export-badges.md (how the badge art was exported)
 idos/          template for running the game as an iDos host module
 ```
 
@@ -30,7 +30,7 @@ idos/          template for running the game as an iDos host module
 
 - `Round` is a plain class: it advances on a fixed 1/120 s step, holds all state (crane, falling room, tower, stability, combo, event, bonus offer) and emits typed `RoundEvent`s (`drop`, `land`, `combo`, `shabyt`, `event`, `bonusOffer`, `crowned`, `end`…).
 - `PixiRenderer` reads that state every frame and subscribes to events for one-shot effects (particles, zoom blur, floating text). The Pixi `Hud` subscribes too. Audio and analytics are just more subscribers in `game.ts`.
-- Because the simulation never touches the DOM or WebGL, tests and bots can play whole rounds headlessly, and the trailer is rendered frame by frame from a real campaign round.
+- Because the simulation never touches the DOM or WebGL, tests can play whole rounds headlessly.
 
 ## Rendering (PixiJS 8, WebGL)
 
@@ -44,7 +44,7 @@ idos/          template for running the game as an iDos host module
 
 `src/platform/idos.ts` uses the official `@idosgames/core` SDK: `auth.autoLogin` / `loginWithDeviceID` (silent guest), `leaderboard.submitScore` / `getLeaderboard` (daily tower, best height, weekly score, five faculty boards), `user.changeUsername`, `analytics.logEvent`, and `auth.linkWallet` for the optional wallet ↔ profile link (iDos challenge → `signMessage` → server verification). If iDos is unreachable the game switches to a local backend and labels everything that is simulated.
 
-The title configuration (leaderboards, analytics events, iframe connect hosts) is written with the iDos MCP. Builds are uploaded with `begin_build_upload` → `vite build --base=<AssetBase>` → zip → PUT → `finish_build_upload(deploy)`.
+Builds are hosted by iDos under versioned CDN paths (`vite build --base=<AssetBase>`), which is also where the badge metadata lives.
 
 ## Solana (mainnet-beta only)
 
@@ -74,7 +74,6 @@ Signers are the player (payer, owner, update authority) and a keypair generated 
 
 Local, versioned save (`localStorage`, v3) with step-by-step migrations and default-merging for new fields. The `SaveStore` interface is separate from storage so cloud saves (iDos UserCustomData) can be added without touching game code.
 
-## Tooling
+## Tests
 
-- `npm test` — 27 vitest tests: deterministic rounds and missions, economy, save migrations, RPC failover/timeout/spacing, Metaplex Core encoding, pending-mint safety, mint execution against a fake wallet and RPC.
-- `scripts/trailer/` — opens in the dev server, renders a real campaign round at a fixed 30 fps, composites captions and title cards, renders the game's own procedural audio with an `OfflineAudioContext`, and hands frames + WAV to ffmpeg.
+`npm test` runs vitest: deterministic rounds and missions, economy, save migrations, RPC failover/timeout/spacing, Metaplex Core encoding, pending-mint safety and the mint flow against a fake wallet and RPC.
