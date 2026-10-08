@@ -26,6 +26,7 @@ import type { RoomId } from "../meta/rooms";
 import { FACULTIES, type FacultyId } from "../social/faculties";
 import { Particles } from "../visuals/particles";
 import { BlockView, type BlockLook } from "./blockView";
+import { ARCHETYPES, crowdSilhouette, Figure, specFor } from "./characters";
 import { clamp01, easeOutBack, hexToRgb, mix, shade } from "./color";
 import { themeFor, type Theme } from "./sky";
 import { TextureBank } from "./textures";
@@ -149,7 +150,11 @@ export class PixiRenderer {
   private trees: Sprite[] = [];
   private lamps: { lamp: Sprite; glow: Sprite }[] = [];
   private flags: { cloth: TilingSprite; pole: Sprite }[] = [];
-  private walkers: Sprite[] = [];
+  private figures: Figure[] = [];
+  private readonly people = new Container();
+  private readonly crowdBack = new Container();
+  private readonly crowdFront = new Container();
+  private peopleKey = "";
   private aura!: Sprite;
   private towerLayer = new Container();
   private movingLayer = new Container();
@@ -306,14 +311,7 @@ export class PixiRenderer {
       this.flags.push({ cloth, pole });
       this.groundWorld.addChild(pole, cloth);
     }
-    for (let i = 0; i < 44; i++) {
-      const wk = b.walker(i);
-      const s = new Sprite(wk.tex);
-      s.anchor.set(wk.ax, wk.ay);
-      s.visible = false;
-      this.walkers.push(s);
-      this.groundWorld.addChild(s);
-    }
+    this.groundWorld.addChild(this.crowdBack, this.crowdFront, this.people);
     this.aura = new Sprite(b.softDot());
     this.aura.anchor.set(0.5);
     this.aura.blendMode = "add";
@@ -464,6 +462,8 @@ export class PixiRenderer {
           p.burst("glow", e.x, e.y, 10, { speed: 90, size: 6, color: "#ffe9a8", g: 40, life: 0.8 });
           p.spawn({ kind: "ring", x: e.x, y: e.y, size: 10, life: 0.5, color: "#ffe9a8" });
           this.kick = 0.25;
+          const top = this.view?.tower.top;
+          if (top) this.blocks.get(top.id)?.cheer();
         } else if (e.q === "good") {
           this.settleBurst(cos.effect, e.x, e.y, 12);
           p.burst("dust", e.x, e.y, 6, { speed: 80, size: 7, color: "#e9dcc0", g: 30, life: 0.7 });
@@ -499,6 +499,7 @@ export class PixiRenderer {
         break;
       case "crowned":
         this.flashZoom(0.2);
+        for (const bv of this.blocks.values()) bv.cheer(3.2);
         if (this.view) {
           const top = this.view.tower.top;
           const x = this.view.tower.visualX(top);
@@ -525,8 +526,11 @@ export class PixiRenderer {
 
   // ── Per-frame update ─────────────────────────────────────────────────────
 
+  private frameDt = 1 / 60;
+
   update(dt: number): void {
     this.time += dt;
+    this.frameDt = dt;
     this.particles.reduced = this.opts.reducedMotion;
     this.particles.update(dt);
     this.hudUi.update(dt);
@@ -629,6 +633,7 @@ export class PixiRenderer {
     const night = Math.min(1, th.lights * 0.8 + (v.event?.id === "session" ? 0.4 : 0));
     const look = this.look(v);
     const lookKey = `${look.facade}|${look.ornament}|${look.faculty}|${look.studentSkin}|${this.bank.scale}`;
+    this.buildPeople(look);
     if (lookKey !== this.lookKey) {
       this.lookKey = lookKey;
       for (const bv of this.blocks.values()) bv.destroy({ children: true });
@@ -752,6 +757,37 @@ export class PixiRenderer {
     this.flashSprite.alpha = this.opts.reducedMotion ? 0 : v.flash * 0.22;
   }
 
+  /** (Re)create the plaza people for the current faculty / student skin / bake scale. */
+  private buildPeople(look: BlockLook): void {
+    const key = `${look.faculty}|${look.studentSkin}|${this.bank.scale}`;
+    if (key === this.peopleKey) return;
+    this.peopleKey = key;
+    for (const f of this.figures) f.destroy({ children: true });
+    this.figures = [];
+    this.people.removeChildren();
+    for (let i = 0; i < 16; i++) {
+      const f = new Figure(this.bank, specFor(i * 31 + 5, look.faculty, look.studentSkin));
+      f.visible = false;
+      this.figures.push(f);
+      this.people.addChild(f);
+    }
+    // Two rows of designed silhouettes for the crowd (hair, backpacks, bags) — not blobs.
+    for (const [layer, n, scale, tint] of [
+      [this.crowdBack, 22, 0.86, 0x3b355e],
+      [this.crowdFront, 16, 0.96, 0x272241],
+    ] as [Container, number, number, number][]) {
+      layer.removeChildren().forEach((c) => c.destroy());
+      for (let i = 0; i < n; i++) {
+        const sil = crowdSilhouette(this.bank, ARCHETYPES[(i * 5 + n) % ARCHETYPES.length], i);
+        const s = new Sprite(sil.tex);
+        s.anchor.set(sil.ax, sil.ay);
+        s.scale.set((i % 2 ? scale : -scale) * (0.94 + ((i * 7) % 5) * 0.03), scale * (0.94 + ((i * 7) % 5) * 0.03));
+        s.tint = tint;
+        layer.addChild(s);
+      }
+    }
+  }
+
   private syncGround(v: WorldView, lights: number): void {
     const foundW = v.tower.blocks[0]?.w ?? 250;
     const pw = foundW + 300;
@@ -790,32 +826,61 @@ export class PixiRenderer {
       f.cloth.skew.y = Math.sin(this.time * 3 + i) * 0.06;
       f.cloth.tint = dim;
     });
-    const walkers = Math.min(16, 3 + Math.floor(v.students / 12));
-    const crowd = v.event?.id === "festival" ? 26 : 0;
-    this.walkers.forEach((sp, i) => {
-      if (i >= walkers + crowd) {
-        sp.visible = false;
+    // People on the plaza: walkers cross it, a few stand and chat (one with tea), everyone panics
+    // when the tower wobbles and cheers when the shanyrak crowns it.
+    const celebrate = v.phase === "crowning" || (v.crowned && !this.opts.menu) || v.event?.id === "festival";
+    const walkers = Math.min(16, 3 + Math.floor(v.students / 10));
+    const dtp = Math.min(0.05, this.frameDt);
+    this.figures.forEach((fig, i) => {
+      if (i >= walkers) {
+        fig.visible = false;
         return;
       }
-      sp.visible = true;
-      const isCrowd = i >= walkers;
+      fig.visible = true;
+      const standing = i % 4 === 0;
+      const dir = i % 2 ? 1 : -1;
       let wx: number;
-      let jump: number;
-      if (isCrowd) {
-        const k = i - walkers;
-        wx = (k % 2 ? 1 : -1) * (foundW / 2 + 20 + ((k * 17) % 160));
-        jump = Math.abs(Math.sin(this.time * 6 + k)) * 6;
+      if (standing) {
+        wx = (i % 8 === 0 ? -1 : 1) * (foundW / 2 + 70 + ((i * 23) % 90));
+        fig.pose = v.danger && !this.opts.menu ? "panic" : celebrate ? "cheer" : i % 8 === 4 ? "tea" : "idle";
+        fig.scale.x = wx > 0 ? -1 : 1;
       } else {
-        const speed = 18 + ((i * 7) % 20);
-        const dir = i % 2 ? 1 : -1;
+        const panic = v.danger && !this.opts.menu;
+        const speed = (panic ? 2.2 : 1) * (16 + ((i * 7) % 16));
         const span = 1100;
         wx = ((((i * 137 + this.time * speed * dir) % span) + span) % span) - span / 2;
-        jump = Math.abs(Math.sin(this.time * 8 + i)) * 1.5;
-        sp.scale.x = dir;
+        fig.pose = panic ? "panic" : celebrate && i % 3 === 0 ? "cheer" : "walk";
+        fig.stride = speed / 22;
+        fig.scale.x = dir;
       }
-      sp.position.set(wx, (isCrowd ? 6 : 12 + (i % 3) * 3) - jump);
-      sp.tint = dim;
+      const row = i % 3;
+      fig.scale.y = 1 - row * 0.05;
+      fig.scale.x *= 1 - row * 0.05;
+      fig.position.set(wx, 10 + row * 4);
+      fig.update(dtp, lights);
     });
+    // Two crowd rows sway in antiphase; the back row drifts with a little parallax.
+    const crowdOn = v.students >= 24 || celebrate;
+    const dense = celebrate;
+    for (const [layer, rowY, par, phase] of [
+      [this.crowdBack, -2, 0.12, 0],
+      [this.crowdFront, 4, 0, Math.PI],
+    ] as [Container, number, number, number][]) {
+      layer.visible = crowdOn && (layer === this.crowdBack || dense);
+      if (!layer.visible) continue;
+      layer.position.set(this.camX * par, rowY);
+      layer.tint = dim;
+      const n = layer.children.length;
+      layer.children.forEach((c, i) => {
+        const side = i % 2 ? 1 : -1;
+        const spread = foundW / 2 + 40 + ((i * 37) % 260);
+        c.x = side * spread;
+        const sway = Math.sin(this.time * 1.6 + phase + i * 0.7);
+        c.rotation = sway * 0.035;
+        c.y = dense ? -Math.abs(Math.sin(this.time * 5 + i * 1.3 + phase)) * 4 : -Math.max(0, sway) * 0.6;
+        c.visible = dense || i < Math.min(n, Math.floor(v.students / 6));
+      });
+    }
   }
 
   private syncTower(v: WorldView, night: number, look: BlockLook): void {
@@ -834,6 +899,7 @@ export class PixiRenderer {
       bv.visible = !(by > viewTop || by + H < viewBottom);
       if (!bv.visible) continue;
       bv.position.set(v.tower.visualX(b), -by);
+      bv.mood = v.event?.id === "session" && b.id % 2 === 1 ? "sleep" : "idle";
       bv.sync(this.time, b.type === "foundation" ? night * 0.7 : night, b.shown, b.crack, b.tilt, b.squash);
     }
     for (const [id, bv] of this.blocks) {

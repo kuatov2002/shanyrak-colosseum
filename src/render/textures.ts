@@ -138,50 +138,6 @@ export class TextureBank {
     });
   }
 
-  student(seed: number, skin: string): Texture {
-    const variant = seed % 24;
-    return this.memo(`stu|${variant}|${skin}|${this.scale}`, () => {
-      const k = this.scale;
-      const s = 7.5;
-      const [c, ctx] = makeCanvas(18 * k, 20 * k);
-      ctx.scale(k, k);
-      const tones = ["#f1c9a5", "#e0ac84", "#c68b62", "#a86c4a", "#f5d6b8"];
-      const shirts = ["#e85d5d", "#4fb6ff", "#ffd75e", "#8ef0a5", "#c27dff", "#ff9ad5", "#ffffff"];
-      const x = 9;
-      const y = 19;
-      const shirt = skin === "stu_sport" ? ["#2a6fd6", "#d63a2a", "#f2b84b"][variant % 3] : shirts[(variant * 7) % shirts.length];
-      ctx.fillStyle = shirt;
-      ctx.beginPath();
-      ctx.ellipse(x, y, s * 0.62, s * 0.5, 0, Math.PI, 0);
-      ctx.fill();
-      ctx.fillStyle = tones[variant % tones.length];
-      ctx.beginPath();
-      const hy = y - s * 0.72;
-      ctx.arc(x, hy, s * 0.36, 0, Math.PI * 2);
-      ctx.fill();
-      if (skin === "stu_takiya") {
-        ctx.fillStyle = variant % 2 ? "#b8323f" : "#1f5f99";
-        ctx.beginPath();
-        ctx.ellipse(x, hy - s * 0.24, s * 0.34, s * 0.16, 0, Math.PI, 0);
-        ctx.fill();
-        ctx.fillStyle = PALETTE.gold;
-        ctx.fillRect(x - s * 0.3, hy - s * 0.26, s * 0.6, s * 0.06);
-      } else if (skin === "stu_grad") {
-        ctx.fillStyle = "#1b1d3a";
-        ctx.fillRect(x - s * 0.45, hy - s * 0.42, s * 0.9, s * 0.1);
-        ctx.fillRect(x - s * 0.22, hy - s * 0.36, s * 0.44, s * 0.14);
-        ctx.fillStyle = PALETTE.gold;
-        ctx.fillRect(x + s * 0.3, hy - s * 0.38, s * 0.05, s * 0.3);
-      } else {
-        ctx.fillStyle = ["#2b1a12", "#3b2416", "#111", "#5a3a1e"][variant % 4];
-        ctx.beginPath();
-        ctx.arc(x, hy - s * 0.08, s * 0.37, Math.PI * 1.05, Math.PI * 1.95);
-        ctx.fill();
-      }
-      return canvasTexture(c, k);
-    });
-  }
-
   /** Small seamless wall ornament tile (cream, used at low alpha over the walls). */
   wallOrnament(kind: string): Texture {
     return this.memo(`wallorn|${kind}`, () => {
@@ -711,26 +667,6 @@ export class TextureBank {
       ctx.arc(32, 16, 6, 0, Math.PI * 2);
       ctx.fill();
       return canvasTexture(c, 1);
-    });
-  }
-
-  /** Student figure for the ground (walkers / crowd). */
-  walker(variant: number): Anchored {
-    return this.memo(`walker|${variant % 6}|${this.scale}`, () => {
-      const k = this.scale;
-      const [c, ctx] = makeCanvas(12 * k, 22 * k);
-      ctx.scale(k, k);
-      const colors = ["#e85d5d", "#4fb6ff", "#ffd75e", "#8ef0a5", "#c27dff", "#ff9ad5"];
-      ctx.fillStyle = colors[variant % 6];
-      ctx.fillRect(3, 9, 6, 10);
-      ctx.fillStyle = "#2b2d40";
-      ctx.fillRect(3.5, 19, 2, 3);
-      ctx.fillRect(6.5, 19, 2, 3);
-      ctx.fillStyle = "#e0ac84";
-      ctx.beginPath();
-      ctx.arc(6, 6, 3.3, 0, Math.PI * 2);
-      ctx.fill();
-      return { tex: canvasTexture(c, k), ax: 0.5, ay: 1 };
     });
   }
 
