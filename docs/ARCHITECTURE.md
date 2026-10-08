@@ -15,10 +15,10 @@ src/
   social/      faculties (weekly war) · leaderboards (iDos + labelled offline fallback)
   platform/    backend interface · idos (SDK) · local (offline)
   solana/      config · rpc (pool) · wallet · token (read-only balance) · nft (Metaplex Core) · nftArt · actions (statuses)
-  render/      world (PixiRenderer) · hud/ (Pixi HUD) · textures (baking) · roomExtras · warmGrade (GLSL) · menuScene
-  design/      skin — one 9-slice design system for Pixi textures and CSS border-image · icons
+  render/      world (PixiRenderer) · characters (vector rig) · hud/ (Pixi HUD) · textures (baking) · roomExtras · warmGrade (GLSL) · menuScene
+  design/      skin — one 9-slice design system for Pixi textures and CSS border-image · glyphs — one icon set, baked for the HUD and inline SVG for menus · icons
   visuals/     particles (ParticleContainer pools, one atlas)
-  audio/       procedural SFX + generative dombra music (WebAudio)
+  audio/       WebAudio: buses → convolution room → limiter (sound) · Karplus–Strong dombra (dsp) · themes (music) · layered SFX (voices)
   ui/          router · DOM helpers · components (dialogs, guide, mint) · screens (hub, round, result, wallet…)
   game.ts      mountGame(host) — wires everything; main.ts mounts it on the page
 tests/         vitest: round, meta, solana (RPC pool, CreateV1 encoding, migrations), mint safety, mint execution

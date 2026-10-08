@@ -86,7 +86,7 @@
 | Layer | Technology |
 |---|---|
 | Game & UI | TypeScript, Vite 8, PixiJS 8 (WebGL), pixi-filters, DOM menus without a framework |
-| Audio | WebAudio — procedural SFX and a generative dombra loop (no audio files) |
+| Audio | WebAudio — Karplus–Strong dombra, frame drum and layered SFX through music/sfx/ambient buses, a convolution room and a limiter (no audio files) |
 | Backend | iDos Games (`@idosgames/core` 0.21): guest auth, leaderboards, analytics, wallet ↔ profile link |
 | Blockchain | Solana mainnet-beta, `@solana/web3.js`, Wallet Standard, Metaplex Core `CreateV1` (hand-encoded, Borsh) |
 | Hosting | iDos build hosting (versioned CDN paths keep NFT metadata URIs immutable) |

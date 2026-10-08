@@ -28,7 +28,7 @@ npm run build      # tsc + vite → dist/ (относительные пути, 
 
 Переменные окружения необязательны (см. `.env.example`): `VITE_IDOS_TITLE_ID` (по умолчанию `JE8W0Z54`), `VITE_IDOS_ENV`, `VITE_SOLANA_RPC` (основной RPC mainnet-beta; резервные endpoint подключаются автоматически).
 
-Стек: **TypeScript + Vite + PixiJS 8 (WebGL)**, меню на DOM без фреймворков. Экран раунда целиком рисует Pixi: мир, HUD, карточки бонусов и частицы. DOM остаётся только для модалок паузы и для live-области скринридера. Физика аркадная и своя, логика отделена от рендера. Весь арт и звук процедурные, внешних ассетов нет: формы один раз запекаются в GPU-текстуры, дальше их компонует, анимирует и фильтрует WebGL.
+Стек: **TypeScript + Vite + PixiJS 8 (WebGL)**, меню на DOM без фреймворков. Экран раунда целиком рисует Pixi: мир, HUD, карточки бонусов и частицы. DOM остаётся только для модалок паузы и для live-области скринридера. Физика аркадная и своя, логика отделена от рендера. Весь арт, иконки и звук процедурные: формы один раз запекаются в GPU-текстуры, дальше их компонует, анимирует и фильтрует WebGL. Из внешнего — только два шрифта под SIL OFL (Rubik и Montserrat Alternates, с казахскими буквами), они лежат в репозитории.
 
 ## Как играть
 
@@ -142,10 +142,13 @@ src/
   platform/    backend (интерфейс + оффлайн) · idos (SDK)
   solana/      config · rpc (пул с failover) · wallet · token · nft (Metaplex Core) · nftArt · actions
   render/      world (PixiJS-рендерер) · blockView · roomExtras · textures (запекание) · warmGrade (свой GLSL-фильтр)
-               hud/ (Pixi HUD: button · hud · fonts) · rooms · shanyrak · sky · glyphs · color · menuScene
-  design/      skin (общая 9-slice дизайн-система для Pixi и CSS border-image) · icons
+               characters (векторный риг студентов) · hud/ (Pixi HUD: button · hud · fonts) · rooms · shanyrak · sky
+               glyphs (значки комнат) · color · menuScene
+  design/      skin (общая 9-slice дизайн-система для Pixi и CSS border-image) · glyphs (единый набор иконок:
+               текстуры для HUD и inline SVG для меню) · icons
   visuals/     particles (ParticleContainer, общий атлас)
-  audio/       sound (SFX + генеративная домбра)
+  audio/       sound (шины, ревербератор, лимитер) · dsp (домбра Karplus–Strong) · music (3 темы × 2 интенсивности)
+               voices (слоистые эффекты, барабан, шейкер, голоса толпы)
   analytics/   events
   ui/          app (роутер) · dom · components/ · screens/ (12 экранов + модальные окна)
   game.ts      mountGame(host) · main.ts — точка входа страницы
