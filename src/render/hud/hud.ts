@@ -25,6 +25,7 @@ import { hexToRgb } from "../color";
 import type { TextureBank } from "../textures";
 import { PixiButton } from "./button";
 import { HUD_BOLD, HUD_DISPLAY, HUD_TEXT, installHudFonts } from "./fonts";
+import { FeltPanel, MedalButton } from "./feltPanel";
 
 export interface HudCallbacks {
   onPause(): void;
@@ -51,32 +52,49 @@ class Chip extends Container {
   readonly bg: NineSliceSprite;
   readonly caption: BitmapText;
   readonly glyph: Sprite | null;
+  private readonly disc: Sprite | null;
   constructor(skin: Skin, iconName: IconName | null, size = 14, tex?: Texture) {
     super();
     this.bg = new NineSliceSprite({ texture: tex ?? skin.chip, leftWidth: CHIP.slice, rightWidth: CHIP.slice, topHeight: CHIP.slice, bottomHeight: CHIP.slice });
     this.glyph = iconName ? new Sprite(icon(iconName)) : null;
+    this.disc = iconName ? new Sprite(skin.medal) : null;
     this.caption = text(HUD_TEXT, size);
     this.addChild(this.bg);
-    if (this.glyph) {
+    if (this.disc && this.glyph) {
+      this.disc.anchor.set(0.5);
       this.glyph.anchor.set(0.5);
-      this.glyph.width = 20;
-      this.glyph.height = 20;
-      this.addChild(this.glyph);
+      this.addChild(this.disc, this.glyph);
     }
     this.addChild(this.caption);
   }
   set(value: string, maxW = 600): void {
     if (this.caption.text !== value) this.caption.text = value;
-    const iconW = this.glyph ? 22 : 0;
-    const w = Math.min(maxW, iconW + this.caption.width + 22);
     const h = Math.max(26, this.caption.height + 10);
+    if (this.disc && this.glyph) {
+      // a token: the icon's medallion overlaps the capsule's left end (as in the menu top bar)
+      const d = h + 8;
+      const capX = d + 2;
+      const w = Math.min(maxW, capX + this.caption.width + 12);
+      this.bg.x = d / 2;
+      this.bg.width = Math.max(CHIP.slice * 2, w - this.bg.x);
+      this.bg.height = h;
+      this.disc.width = d;
+      this.disc.height = d;
+      this.disc.position.set(d / 2, h / 2);
+      this.glyph.width = d * 0.52;
+      this.glyph.height = d * 0.52;
+      this.glyph.position.set(d / 2, h / 2);
+      this.caption.position.set(capX, (h - this.caption.height) / 2);
+      return;
+    }
+    const w = Math.min(maxW, this.caption.width + 22);
+    this.bg.x = 0;
     this.bg.width = w;
     this.bg.height = h;
-    if (this.glyph) this.glyph.position.set(13, h / 2);
-    this.caption.position.set(11 + iconW, (h - this.caption.height) / 2);
+    this.caption.position.set(11, (h - this.caption.height) / 2);
   }
   get w(): number {
-    return this.bg.width;
+    return this.bg.x + this.bg.width;
   }
   get h(): number {
     return this.bg.height;
@@ -133,6 +151,8 @@ export class Hud extends Container {
   private time = 0;
 
   private heightText!: BitmapText;
+  /** Felt plaque behind the floor number. */
+  private floorPlate: FeltPanel;
   private floorLabel!: BitmapText;
   private scoreText!: BitmapText;
   private modeLabel!: BitmapText;
@@ -140,7 +160,7 @@ export class Hud extends Container {
   private missionChip: Chip;
   private shaiPill: Chip;
   private studentPill: Chip;
-  private pauseBtn: PixiButton;
+  private pauseBtn: MedalButton;
   private stab = new Container();
   private stabTrack: NineSliceSprite;
   private stabFill: NineSliceSprite;
@@ -151,7 +171,7 @@ export class Hud extends Container {
   private shieldText!: BitmapText;
   private lives: Sprite[] = [];
   private nextCard = new Container();
-  private nextBg: NineSliceSprite;
+  private nextBg: FeltPanel;
   private nextFrame: NineSliceSprite;
   private nextTitle!: BitmapText;
   private nextThumb = new Sprite();
@@ -171,7 +191,7 @@ export class Hud extends Container {
   private hintBg: NineSliceSprite;
   private hintText!: BitmapText;
   private banner = new Container();
-  private bannerBg: NineSliceSprite;
+  private bannerBg: FeltPanel;
   private bannerTitle!: BitmapText;
   private bannerSub!: BitmapText;
   private bannerT = 0;
@@ -189,7 +209,7 @@ export class Hud extends Container {
   private offerDim = new Graphics();
   private offerTitle!: BitmapText;
   private offerSub!: BitmapText;
-  private offerCards: { id: BonusId; c: Container; frame: NineSliceSprite; bg: NineSliceSprite; hover: boolean; baseX: number; baseY: number }[] = [];
+  private offerCards: { id: BonusId; c: Container; frame: NineSliceSprite; bg: FeltPanel; hover: boolean; baseX: number; baseY: number }[] = [];
   private offerFocus = -1;
   private offerT = 0;
   /** Index of the picked card while the offer plays its outro (gameplay has already resumed). */
@@ -202,10 +222,13 @@ export class Hud extends Container {
   ) {
     super();
     installHudFonts();
-    this.heightText = text(HUD_DISPLAY, 44, "0");
-    this.floorLabel = text(HUD_TEXT, 12, "ЭТАЖ", 0xefe3c8);
+    this.heightText = text(HUD_DISPLAY, 40, "0");
+    this.heightText.anchor.set(0.5, 0);
+    this.floorPlate = new FeltPanel(skin, 0.35);
+    this.floorLabel = text(HUD_TEXT, 11, "ЭТАЖ", 0xffd75e);
+    this.floorLabel.anchor.set(0.5, 0);
     this.scoreText = text(HUD_BOLD, 16, "0 очков", 0xffd75e);
-    this.modeLabel = text(HUD_TEXT, 12, "", 0xb9b0cf);
+    this.modeLabel = text(HUD_BOLD, 13, "", 0xefe3c8);
     this.stabLabel = text(HUD_TEXT, 12, "Устойчивость", 0xb9b0cf);
     this.stabNum = text(HUD_BOLD, 15, "100");
     this.shieldText = text(HUD_BOLD, 14, "", 0x9fd8ff);
@@ -223,7 +246,7 @@ export class Hud extends Container {
     this.missionChip = new Chip(skin, "target", 13);
     this.shaiPill = new Chip(skin, "coin", 14);
     this.studentPill = new Chip(skin, "cap", 14);
-    this.pauseBtn = new PixiButton(skin, "soft", "", { icon: "pause", height: 42, minWidth: 44, paddingX: 8 });
+    this.pauseBtn = new MedalButton(skin, "pause", 46);
     this.pauseBtn.onTap = () => this.cb?.onPause();
 
     const panel = (t: Texture) => new NineSliceSprite({ texture: t, leftWidth: PANEL.slice, rightWidth: PANEL.slice, topHeight: PANEL.slice, bottomHeight: PANEL.slice });
@@ -242,7 +265,7 @@ export class Hud extends Container {
     }
     this.stab.addChild(this.stabFrame, this.stabLabel, this.stabTrack, this.stabFill, this.stabNum, this.shieldIcon, this.shieldText, ...this.lives);
 
-    this.nextBg = panel(skin.panel);
+    this.nextBg = new FeltPanel(skin, 0.35);
     this.nextFrame = panel(skin.frame);
     this.nextThumb.anchor.set(0.5);
     this.nextCard.addChild(this.nextBg, this.nextFrame, this.nextTitle, this.nextThumb, this.nextName);
@@ -254,7 +277,7 @@ export class Hud extends Container {
     this.hintBg = panel(skin.cream);
     this.hint.addChild(this.hintBg, this.hintText);
     this.hint.visible = false;
-    this.bannerBg = panel(skin.panel);
+    this.bannerBg = new FeltPanel(skin);
     this.bannerTitle.anchor.set(0.5, 0);
     this.bannerSub.anchor.set(0.5, 0);
     this.banner.addChild(this.bannerBg, this.bannerTitle, this.bannerSub);
@@ -273,6 +296,7 @@ export class Hud extends Container {
     this.offer.visible = false;
 
     this.addChild(
+      this.floorPlate,
       this.heightText,
       this.floorLabel,
       this.scoreText,
@@ -433,7 +457,7 @@ export class Hud extends Container {
     options.forEach((id, i) => {
       const b = BONUSES[id];
       const c = new Container();
-      const bg = new NineSliceSprite({ texture: this.skin.panel, leftWidth: PANEL.slice, rightWidth: PANEL.slice, topHeight: PANEL.slice, bottomHeight: PANEL.slice });
+      const bg = new FeltPanel(this.skin);
       const frame = new NineSliceSprite({ texture: this.skin.frame, leftWidth: PANEL.slice, rightWidth: PANEL.slice, topHeight: PANEL.slice, bottomHeight: PANEL.slice });
       frame.tint = 0xf2b84b;
       frame.alpha = 0.5;
@@ -536,9 +560,8 @@ export class Hud extends Container {
     const narrow = w < 520;
     const short = this.short;
     const top = 8;
-    this.heightText.position.set(12, top);
-    this.floorLabel.position.set(14, top + 50);
-    this.scoreText.position.set(12, top + 66);
+    this.layoutFloor();
+    this.scoreText.position.set(12, top + 82);
     this.pauseBtn.position.set(w - this.pauseBtn.buttonWidth - 10, top);
     // stability bar
     // Landscape phones: the bar joins the top row between the score and the coin pills.
@@ -563,28 +586,36 @@ export class Hud extends Container {
     // next card
     const cw = narrow ? 92 : 108;
     this.nextCard.position.set(w - cw - 10, sy + 44);
-    this.nextBg.width = cw;
-    this.nextBg.height = narrow ? 92 : 100;
+    this.nextBg.setSize(cw, narrow ? 92 : 100);
     this.nextFrame.width = cw;
-    this.nextFrame.height = this.nextBg.height;
-    this.nextTitle.position.set((cw - this.nextTitle.width) / 2, 8);
-    this.nextThumb.position.set(cw / 2, this.nextBg.height / 2 + 2);
-    this.nextName.position.set((cw - this.nextName.width) / 2, this.nextBg.height - 22);
+    this.nextFrame.height = this.nextBg.panelHeight;
+    this.nextTitle.position.set((cw - this.nextTitle.width) / 2, 9);
+    this.nextThumb.position.set(cw / 2, this.nextBg.panelHeight / 2 + 2);
+    this.nextName.position.set((cw - this.nextName.width) / 2, this.nextBg.panelHeight - 23);
     if (short) {
       // Right column under the next-room card; the centre stays free for the swing and the fall.
-      const nextBottom = this.nextCard.y + this.nextBg.height;
+      const nextBottom = this.nextCard.y + this.nextBg.panelHeight;
       this.combo.position.set(w - cw / 2 - 10, nextBottom + 54);
       this.pills.position.set(w - 120, nextBottom + 110);
     } else {
       this.combo.position.set(w / 2, h * 0.27);
       this.pills.position.set(w / 2, h * 0.46);
     }
-    this.bonusRow.position.set(12, h - 96);
+    this.bonusRow.position.set(12, short ? h - 50 : h - 96);
     this.crownBtn.position.set((w - this.crownBtn.buttonWidth) / 2, h - this.crownBtn.buttonHeight - 16);
     this.skipBtn.position.set(10, h - this.skipBtn.buttonHeight - 14);
     this.layoutHint();
     this.layoutBanner();
     this.layoutOffer();
+  }
+
+  /** The floor number on its felt plaque, sized to the number. */
+  private layoutFloor(): void {
+    const pw = Math.max(70, Math.ceil(this.heightText.width) + 30);
+    this.floorPlate.position.set(8, 6);
+    this.floorPlate.setSize(pw, 72);
+    this.floorLabel.position.set(8 + pw / 2, 15);
+    this.heightText.position.set(8 + pw / 2, 28);
   }
 
   private layoutHint(): void {
@@ -600,7 +631,7 @@ export class Hud extends Container {
     this.hintBg.height = this.hintText.height + 20;
     // Phones: directly under the stability bar (portrait) or in the left column (landscape), never
     // over the swinging room. The mode label hides while the hint is up (same spot).
-    const y = narrow ? this.stab.y + 38 : short ? 96 : 134;
+    const y = narrow ? this.stab.y + 38 : short ? 112 : 134;
     this.hintY = y;
     this.hint.position.set(narrow || short ? 10 : (this.w - bw) / 2, y);
   }
@@ -614,8 +645,7 @@ export class Hud extends Container {
     this.bannerSub.style.align = "center";
     const bw = Math.min(maxW, Math.max(this.bannerTitle.width, this.bannerSub.visible ? this.bannerSub.width : 0) + 40);
     const bh = 18 + this.bannerTitle.height + (this.bannerSub.visible ? this.bannerSub.height + 6 : 0) + 14;
-    this.bannerBg.width = bw;
-    this.bannerBg.height = bh;
+    this.bannerBg.setSize(bw, bh);
     this.bannerTitle.position.set(bw / 2, 14);
     this.bannerSub.position.set(bw / 2, 18 + this.bannerTitle.height + 2);
     this.banner.pivot.set(bw / 2, bh / 2);
@@ -646,9 +676,8 @@ export class Hud extends Container {
     this.offerSub.style.align = "center";
     this.offerCards.forEach((card, i) => {
       const c = card.c;
-      const [bg, frame, ic, num, name, desc, tag] = c.children as [NineSliceSprite, NineSliceSprite, Sprite, BitmapText, BitmapText, BitmapText, Chip];
-      bg.width = cardW;
-      bg.height = cardH;
+      const [bg, frame, ic, num, name, desc, tag] = c.children as [FeltPanel, NineSliceSprite, Sprite, BitmapText, BitmapText, BitmapText, Chip];
+      bg.setSize(cardW, cardH);
       frame.width = cardW;
       frame.height = cardH;
       num.position.set(12, 10);
@@ -694,7 +723,10 @@ export class Hud extends Container {
     const set = (t: BitmapText, v: string) => {
       if (t.text !== v) t.text = v;
     };
-    set(this.heightText, String(r.height));
+    if (this.heightText.text !== String(r.height)) {
+      this.heightText.text = String(r.height);
+      this.layoutFloor();
+    }
     // score, $SHAI and students count up over ~300 ms instead of jumping
     const rm = this.reducedMotion;
     const cnt = this.counts;
@@ -739,10 +771,10 @@ export class Hud extends Container {
     const chipMaxW = narrow ? this.w - 130 : short ? Math.min(220, this.w * 0.27) : this.w * 0.5;
     const chipX = (cw: number) => (side ? 10 : midX - cw / 2);
     if (narrow) this.modeLabel.position.set(12, this.stab.y + 38);
-    else if (short) this.modeLabel.position.set(12, 96);
+    else if (short) this.modeLabel.position.set(12, 112);
     else this.modeLabel.position.set(midX - this.modeLabel.width / 2, 10);
     this.modeLabel.visible = !(side && this.hint.visible);
-    let chipY = narrow ? this.stab.y + 56 : short ? 114 : 30;
+    let chipY = narrow ? this.stab.y + 56 : short ? 130 : 30;
     const evText = r.event ? `${EVENTS[r.event.id].name} · ещё ${r.event.left}` : r.mission?.constantWind ? "Ветреный день" : "";
     this.eventChip.visible = !!evText;
     if (evText) {
@@ -763,12 +795,12 @@ export class Hud extends Container {
       const room = ROOMS[r.nextType];
       const art = this.bank.room(r.nextType, 190 * room.widthK, r.cfg.cosmetics.facade, r.cfg.cosmetics.ornament, r.cfg.faculty);
       this.nextThumb.texture = art.tex;
-      const maxW = this.nextBg.width - 16;
+      const maxW = this.nextBg.panelWidth - 16;
       const k = maxW / art.tex.width;
       this.nextThumb.scale.set(k);
       this.nextThumb.anchor.set(0.5, 0.5);
       this.nextName.text = room.name;
-      this.nextName.position.set((this.nextBg.width - this.nextName.width) / 2, this.nextBg.height - 22);
+      this.nextName.position.set((this.nextBg.panelWidth - this.nextName.width) / 2, this.nextBg.panelHeight - 23);
       this.nextFrame.tint = hex(RARITY_COLOR[room.rarity]);
     }
     // combo

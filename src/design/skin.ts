@@ -109,15 +109,15 @@ function shade(hex: string, k: number): string {
 function buttonColors(kind: ButtonKind, t: Tokens): { top: string; bottom: string; lip: string; text: string; line: string } {
   switch (kind) {
     case "gold":
-      return { top: t.gold2, bottom: t.gold, lip: "#9a6413", text: "#2a1a05", line: "rgba(80,40,0,0.55)" };
+      return { top: "#ffe28f", bottom: "#da9426", lip: "#8a5510", text: "#3a2205", line: "rgba(122,74,20,0.7)" };
     case "teal":
-      return { top: shade(t.turq, 0.18), bottom: t.turq, lip: "#13584f", text: "#ffffff", line: "rgba(0,40,36,0.6)" };
+      return { top: "#4fd6c6", bottom: "#1b7f74", lip: "#0f4d45", text: "#ffffff", line: "rgba(0,40,36,0.6)" };
     case "danger":
-      return { top: shade(t.red, 0.15), bottom: t.red, lip: "#7d2020", text: "#ffffff", line: "rgba(60,0,0,0.6)" };
+      return { top: "#f07272", bottom: "#9e2b2b", lip: "#6b1b1b", text: "#ffffff", line: "rgba(60,0,0,0.6)" };
     case "ghost":
-      return { top: "rgba(0,0,0,0)", bottom: "rgba(0,0,0,0)", lip: "rgba(0,0,0,0)", text: t.cream, line: "rgba(242,184,75,0.55)" };
+      return { top: "rgba(10,8,30,0.35)", bottom: "rgba(10,8,30,0.35)", lip: "rgba(0,0,0,0)", text: t.cream, line: "rgba(242,184,75,0.5)" };
     default:
-      return { top: shade(t.panel2, 0.1), bottom: t.panel2, lip: shade(t.panel, -0.35), text: t.text, line: "rgba(255,255,255,0.12)" };
+      return { top: "#4b4398", bottom: "#2d266d", lip: "#120f2e", text: t.text, line: "rgba(242,184,75,0.3)" };
   }
 }
 
@@ -160,11 +160,16 @@ function drawButton(kind: ButtonKind, state: ButtonState, t: Tokens): HTMLCanvas
     ctx.lineTo(w - 12, bodyY + 2.5);
     ctx.stroke();
   }
-  // tiny ornament ticks at the sides (shared with panels)
-  ctx.fillStyle = kind === "gold" ? "rgba(122,74,20,0.55)" : "rgba(242,184,75,0.6)";
-  for (const x of [5, w - 7]) {
+  // two diamond studs, the signature of every button (as in the CSS theme)
+  ctx.fillStyle = kind === "gold" ? "rgba(58,34,5,0.45)" : "rgba(255,243,214,0.45)";
+  for (const x of [8, w - 8]) {
+    const y = bodyY + bodyH / 2;
     ctx.beginPath();
-    ctx.arc(x + 1, bodyY + bodyH / 2, 1.3, 0, Math.PI * 2);
+    ctx.moveTo(x, y - 2.6);
+    ctx.lineTo(x + 2.6, y);
+    ctx.lineTo(x, y + 2.6);
+    ctx.lineTo(x - 2.6, y);
+    ctx.closePath();
     ctx.fill();
   }
   // focus ring (keyboard)
@@ -199,19 +204,27 @@ function drawPanel(t: Tokens, variant: "panel" | "cream" | "frame"): HTMLCanvasE
     g.addColorStop(0, "#fff8e6");
     g.addColorStop(1, "#f3e3bd");
   } else {
-    g.addColorStop(0, shade(t.panel2, 0.04));
-    g.addColorStop(1, t.panel);
+    g.addColorStop(0, "#2b2563");
+    g.addColorStop(0.7, "#1f1a4a");
+    g.addColorStop(1, "#16123a");
   }
   ctx.fillStyle = g;
   rr(ctx, 1, 1, w - 2, h - 2, 16);
   ctx.fill();
-  ctx.strokeStyle = variant === "cream" ? "rgba(150,100,40,0.6)" : "rgba(242,184,75,0.55)";
+  ctx.strokeStyle = variant === "cream" ? "rgba(150,100,40,0.6)" : "rgba(0,0,0,0.6)";
   ctx.lineWidth = 1.4;
   ctx.stroke();
-  ctx.strokeStyle = variant === "cream" ? "rgba(150,100,40,0.25)" : "rgba(242,184,75,0.22)";
+  ctx.strokeStyle = variant === "cream" ? "rgba(150,100,40,0.25)" : "rgba(242,184,75,0.2)";
   ctx.lineWidth = 1;
-  rr(ctx, 4.5, 4.5, w - 9, h - 9, 13);
+  rr(ctx, 2.5, 2.5, w - 5, h - 5, 14.5);
   ctx.stroke();
+  if (variant !== "cream") {
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.beginPath();
+    ctx.moveTo(14, 3.5);
+    ctx.lineTo(w - 14, 3.5);
+    ctx.stroke();
+  }
   // corner curls
   ctx.strokeStyle = variant === "cream" ? "rgba(150,100,40,0.7)" : t.gold;
   ctx.lineWidth = 1.2;
@@ -234,17 +247,20 @@ function drawPanel(t: Tokens, variant: "panel" | "cream" | "frame"): HTMLCanvasE
 function drawChip(t: Tokens): HTMLCanvasElement {
   const { w, h } = CHIP;
   const [c, ctx] = canvas(w, h);
-  ctx.fillStyle = "rgba(20,16,50,0.82)";
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, "#2c2665");
+  g.addColorStop(1, "#19153f");
+  ctx.fillStyle = g;
   rr(ctx, 1, 1, w - 2, h - 2, (h - 2) / 2);
   ctx.fill();
-  ctx.strokeStyle = "rgba(242,184,75,0.45)";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(0,0,0,0.6)";
+  ctx.lineWidth = 1.2;
   ctx.stroke();
-  ctx.fillStyle = t.gold;
-  ctx.beginPath();
-  ctx.arc(6, h / 2, 1.2, 0, Math.PI * 2);
-  ctx.arc(w - 6, h / 2, 1.2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.strokeStyle = "rgba(242,184,75,0.42)";
+  ctx.lineWidth = 1;
+  rr(ctx, 2.2, 2.2, w - 4.4, h - 4.4, (h - 4.4) / 2);
+  ctx.stroke();
+  void t;
   return c;
 }
 
@@ -254,17 +270,25 @@ function drawBar(kind: "track" | "fill"): HTMLCanvasElement {
   const h = 14;
   const [c, ctx] = canvas(w, h);
   if (kind === "track") {
-    ctx.fillStyle = "rgba(255,255,255,0.1)";
+    ctx.fillStyle = "rgba(6,4,20,0.78)";
     rr(ctx, 0.5, 0.5, w - 1, h - 1, 7);
     ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.strokeStyle = "rgba(242,184,75,0.25)";
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.beginPath();
+    ctx.moveTo(6, 2);
+    ctx.lineTo(w - 6, 2);
     ctx.stroke();
   } else {
     const g = ctx.createLinearGradient(0, 0, 0, h);
     g.addColorStop(0, "#ffffff");
-    g.addColorStop(1, "#cfcfcf");
+    g.addColorStop(1, "#c4c4c4");
     ctx.fillStyle = g;
     rr(ctx, 1.5, 1.5, w - 3, h - 3, 5.5);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    rr(ctx, 4, 2.5, w - 8, 3, 1.5);
     ctx.fill();
   }
   return c;
@@ -307,6 +331,40 @@ function drawFelt(): HTMLCanvasElement {
   return c;
 }
 
+/** Round felt medallion with a gold ring (pause button, resource tokens). */
+function drawMedal(): HTMLCanvasElement {
+  const S = 48;
+  const [c, ctx] = canvas(S, S);
+  const r = 21;
+  ctx.shadowColor = "rgba(0,0,0,0.5)";
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 2;
+  const g = ctx.createRadialGradient(S * 0.38, S * 0.32, 2, S / 2, S / 2, r);
+  g.addColorStop(0, "#5a4fb8");
+  g.addColorStop(1, "#1d1846");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(S / 2, S / 2, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.strokeStyle = "#f2c25a";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(S / 2, S / 2, r - 1, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(14,11,38,0.9)";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(S / 2, S / 2, r - 3.2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(242,184,75,0.3)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(S / 2, S / 2, r - 5, 0, Math.PI * 2);
+  ctx.stroke();
+  return c;
+}
+
 export interface Skin {
   tokens: Tokens;
   button(kind: ButtonKind, state: ButtonState): Texture;
@@ -316,6 +374,10 @@ export interface Skin {
   chip: Texture;
   barTrack: Texture;
   barFill: Texture;
+  /** Round felt medallion, 48 logical px. */
+  medal: Texture;
+  /** Seamless felt fibre tile for TilingSprite overlays (192 px). */
+  felt: Texture;
 }
 
 let cached: Skin | null = null;
@@ -346,7 +408,8 @@ export function buildSkin(): Skin {
   root.setProperty("--ds-panel", `url("${panelC.toDataURL("image/png")}")`);
   root.setProperty("--ds-cream", `url("${creamC.toDataURL("image/png")}")`);
   root.setProperty("--ds-chip", `url("${chipC.toDataURL("image/png")}")`);
-  root.setProperty("--felt-tex", `url("${drawFelt().toDataURL("image/png")}")`);
+  const feltC = drawFelt();
+  root.setProperty("--felt-tex", `url("${feltC.toDataURL("image/png")}")`);
   document.documentElement.classList.add("ds-ready");
   cached = {
     tokens: t,
@@ -357,6 +420,8 @@ export function buildSkin(): Skin {
     chip: tex(chipC),
     barTrack: tex(drawBar("track")),
     barFill: tex(drawBar("fill")),
+    medal: tex(drawMedal()),
+    felt: new Texture({ source: new CanvasSource({ resource: feltC, resolution: 1 }) }),
   };
   return cached;
 }
