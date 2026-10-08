@@ -330,6 +330,8 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
       backend = idos;
       store.setSession({ online: "online", userId: idos.userId, onlineError: null });
       void idos.setName(store.data.player.name);
+      // warm the board cache in the background so the Rating screen opens instantly
+      setTimeout(() => void leaderboards.prefetch(), 2500);
     } else {
       backend = new LocalBackend();
       store.setSession({ online: "offline", onlineError: res.error ?? null });

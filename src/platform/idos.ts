@@ -30,6 +30,9 @@ export class IdosBackend implements Backend {
   readonly kind = "idos" as const;
   private client: IdosClient | null = null;
   private connected = false;
+  /** iDos answers a board in ~2 s and holds back bursts (up to ~13 s), so board reads go one at a time. */
+  private boardQueue: Promise<unknown> = Promise.resolve();
+  private inflight = new Map<string, Promise<BoardResult>>();
   readonly titleId: string;
 
   /** Pass the host's signed-in client inside an iDos app; standalone builds create their own. */
@@ -85,10 +88,22 @@ export class IdosBackend implements Backend {
     }
   }
 
-  async getBoard(boardId: string): Promise<BoardResult> {
+  getBoard(boardId: string): Promise<BoardResult> {
+    if (!this.client || !this.connected) return Promise.resolve({ ok: false, error: "offline" });
+    const pending = this.inflight.get(boardId);
+    if (pending) return pending;
+    const run = this.boardQueue.then(() => this.fetchBoard(boardId));
+    this.boardQueue = run.catch(() => undefined);
+    this.inflight.set(boardId, run);
+    void run.finally(() => this.inflight.delete(boardId));
+    return run;
+  }
+
+  private async fetchBoard(boardId: string): Promise<BoardResult> {
     if (!this.client || !this.connected) return { ok: false, error: "offline" };
     try {
-      const res = await this.client.leaderboard.getLeaderboard(boardId);
+      const res = await withTimeout(this.client.leaderboard.getLeaderboard(boardId), 8000);
+      if (!res) return { ok: false, error: "timeout" };
       if (!res.ok) return { ok: false, error: res.error };
       const rows = (res.data.TopUsers ?? []).map((u, i) => ({
         userId: u.UserID,
