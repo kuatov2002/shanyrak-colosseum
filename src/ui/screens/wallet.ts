@@ -112,7 +112,7 @@ export function walletScreen(app: App): Screen {
                 h("a.link", { href: "https://phantom.com/download", target: "_blank", rel: "noopener" }, "Phantom"),
                 " или ",
                 h("a.link", { href: "https://solflare.com/download", target: "_blank", rel: "noopener" }, "Solflare"),
-                " и обновите страницу. Если игра открыта внутри idosgames.com, откройте её по прямому адресу: кошельки во фрейме могут не работать.",
+                " и обновите страницу. Если игра открыта на странице idosgames.com, откройте её по прямой ссылке — там кошелёк подключается надёжнее.",
               )
             : "",
         ),
@@ -134,7 +134,7 @@ export function walletScreen(app: App): Screen {
           null,
           "Значок — NFT в Solana с картинкой достижения. Стоит около 0.0018 SOL: почти всё это возвратный депозит за хранение, комиссия сети — меньше цента. Точная сумма видна до подписи.",
         ),
-        base ? "" : h("p.note", null, "Выпуск значков работает в опубликованной версии игры на iDos."),
+        base ? "" : h("p.note", null, "Выпуск значков сейчас недоступен."),
         h(
           "div.grid-cards.badges",
           null,
@@ -170,7 +170,7 @@ export function walletScreen(app: App): Screen {
         "div.ws-body",
         null,
         h("b", null, "Необязательно: привяжите кошелёк к профилю"),
-        h("small.muted", null, "Бесплатная подпись сообщения (не транзакция): iDos запомнит, что этот кошелёк ваш. Пригодится для будущих наград по кошельку."),
+        h("small.muted", null, "Бесплатная подпись сообщения (не транзакция): профиль запомнит, что этот кошелёк ваш."),
         link.message ? h(`p.ac-msg${link.status === "error" ? ".error" : ""}`, null, link.message) : "",
         h(
           "div.row",
@@ -181,7 +181,7 @@ export function walletScreen(app: App): Screen {
                 kind: "primary",
                 disabled: !w.address || app.actions.busy("link"),
               }),
-          !w.address ? h("small.muted", null, "Сначала подключите кошелёк") : app.store.session.online !== "online" ? h("small.muted", null, "Нужно подключение к iDos") : "",
+          !w.address ? h("small.muted", null, "Сначала подключите кошелёк") : app.store.session.online !== "online" ? h("small.muted", null, "Нужно подключение к сети") : "",
         ),
       ),
     );
@@ -198,7 +198,7 @@ export function walletScreen(app: App): Screen {
           "ul.safety",
           null,
           h("li", null, "Мы никогда не просим seed-фразу или приватный ключ. Каждая подпись — только по вашей кнопке, в окне вашего кошелька."),
-          h("li", null, "Перед подписью транзакция проверяется симуляцией в mainnet, сумма показывается заранее."),
+          h("li", null, "Перед подписью транзакция проверяется, сумма показывается заранее."),
           h("li", null, "Игра не берёт комиссий и ничего не переводит себе: платите вы только сети Solana."),
         ),
         h(
@@ -207,7 +207,7 @@ export function walletScreen(app: App): Screen {
           h("p", null, h("b", null, `Токен ${SHAI_TOKEN.symbol}`), ` · ${SHAI_TOKEN.network}`),
           h("p.mono.small", null, SHAI_TOKEN.mint),
           h("a.link", { href: SOLANA.explorerAddress(SHAI_TOKEN.mint), target: "_blank", rel: "noopener" }, "Открыть в Solana Explorer ↗"),
-          h("p.muted", null, "Монеты $SHAI в игре — игровые и с токеном не связаны: в этой версии ввод и вывод токена выключены."),
+          h("p.muted", null, "Монеты $SHAI в игре — игровые и с токеном не связаны: ввести или вывести их нельзя."),
           h("p.note", null, SHAI_TOKEN.disclaimer),
         ),
         h("h4", null, "История"),

@@ -7,6 +7,7 @@ import type { Store } from "../core/state";
 import type { Backend } from "../platform/backend";
 import { SOLANA } from "./config";
 import { checkPendingMint, executeMint, fmtSol, isStale, MintError, prepareMint, type PreparedMint } from "./nft";
+import { badgeInfo } from "./nftArt";
 import { describeRpcError } from "./token";
 import { describeWalletError, type WalletManager } from "./wallet";
 
@@ -22,7 +23,7 @@ export interface ActionState {
 
 export const STATUS_LABEL: Record<ActionStatus, string> = {
   idle: "Готово к действию",
-  checking: "Проверяем транзакцию (симуляция)…",
+  checking: "Проверяем транзакцию…",
   ready: "Проверено — можно подписать",
   "awaiting-wallet": "Ожидание кошелька — подтвердите в окне кошелька",
   sending: "Отправка в сеть…",
@@ -71,20 +72,20 @@ export class SolanaActions {
       this.set("link", { status: "error", message: "Сначала подключите кошелёк." });
       return;
     }
-    this.set("link", { status: "awaiting-wallet", message: "Подпишите сообщение iDos в кошельке. Это бесплатно и не создаёт транзакцию." });
+    this.set("link", { status: "awaiting-wallet", message: "Подпишите сообщение в кошельке. Это бесплатно и не создаёт транзакцию." });
     try {
       const res = await this.backend().linkWallet(address, (msg) => adapter.signMessage(msg));
       if (!res.ok) {
-        this.set("link", { status: "error", message: `iDos не привязал кошелёк: ${res.error ?? "неизвестная ошибка"}` });
+        this.set("link", { status: "error", message: `Не удалось привязать кошелёк: ${res.error ?? "попробуйте ещё раз"}` });
         return;
       }
       this.store.mutate((s) => {
         s.wallet.address = address;
         s.wallet.walletName = adapter.option.name;
         s.wallet.linkedToProfile = true;
-        s.wallet.records.unshift({ kind: "wallet-link", signature: "", at: Date.now(), note: "Кошелёк привязан к профилю iDos" });
+        s.wallet.records.unshift({ kind: "wallet-link", signature: "", at: Date.now(), note: "Кошелёк привязан к профилю" });
       });
-      this.set("link", { status: "success", message: "Кошелёк привязан к вашему профилю iDos." });
+      this.set("link", { status: "success", message: "Кошелёк привязан к вашему профилю." });
     } catch (err) {
       this.set("link", { status: "error", message: describeWalletError(err) });
     }
@@ -108,7 +109,7 @@ export class SolanaActions {
         if (outcome === "landed") {
           this.store.mutate((s) => {
             s.wallet.minted[id] = { asset: pending.asset, signature: pending.signature, at: pending.at };
-            s.wallet.records.unshift({ kind: "nft-mint", signature: pending.signature, at: pending.at, note: `Значок ${id} · ${pending.asset.slice(0, 6)}… (подтверждён позже)` });
+            s.wallet.records.unshift({ kind: "nft-mint", signature: pending.signature, at: pending.at, note: `Значок «${badgeInfo(id)?.name ?? "достижение"}» (подтверждён позже)` });
             delete s.wallet.pendingMints[id];
           });
           this.set(key, { status: "success", signature: pending.signature, explorer: SOLANA.explorerTx(pending.signature), message: "Прошлая транзакция всё-таки прошла — значок уже ваш. Повторный минт не нужен." });
@@ -132,7 +133,7 @@ export class SolanaActions {
         return;
       }
     }
-    this.set(key, { status: "checking", message: "Симулируем транзакцию в Solana mainnet…", prepared: undefined, signature: undefined, explorer: undefined });
+    this.set(key, { status: "checking", message: "Проверяем транзакцию…", prepared: undefined, signature: undefined, explorer: undefined });
     try {
       const p = await prepareMint(address, id);
       const total = p.rentLamports + p.feeLamports;
@@ -169,9 +170,9 @@ export class SolanaActions {
       this.store.mutate((s) => {
         delete s.wallet.pendingMints[id];
         s.wallet.minted[id] = { asset: p.asset, signature, at: Date.now() };
-        s.wallet.records.unshift({ kind: "nft-mint", signature, at: Date.now(), note: `Значок «${p.name}» · ${p.asset.slice(0, 6)}…` });
+        s.wallet.records.unshift({ kind: "nft-mint", signature, at: Date.now(), note: `Значок «${p.name}»` });
       });
-      this.set(key, { status: "success", signature, explorer: SOLANA.explorerTx(signature), prepared: undefined, message: `Значок сминчен. Asset: ${p.asset.slice(0, 8)}…` });
+      this.set(key, { status: "success", signature, explorer: SOLANA.explorerTx(signature), prepared: undefined, message: `Значок «${p.name}» выпущен — он в вашем кошельке.` });
     } catch (err) {
       if (err instanceof MintError && err.kind === "expired" && err.signature) {
         const signature = err.signature;

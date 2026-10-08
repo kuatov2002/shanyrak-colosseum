@@ -77,7 +77,7 @@ export function resultScreen(app: App): Screen {
   if (r.mode === "daily") {
     void app.leaderboards.board("daily_tower").then((b) => {
       if (b.myRank) {
-        rankLine.textContent = `Ваше место в ежедневной башне: #${b.myRank} (${b.source === "online" ? "онлайн" : "оффлайн + демо"})`;
+        rankLine.textContent = `Ваше место в ежедневной башне: #${b.myRank}`;
         if (b.myRank <= 10) {
           app.store.mutate((s) => {
             applyMetrics(WEEKLY_QUESTS, s.weekly.quests, { dailyRank: 1 });

@@ -290,7 +290,6 @@ main.scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; over
 .item-card.owned { border-color: rgba(79, 208, 138, 0.35); }
 .room-img { width: 100%; max-width: 140px; height: auto; }
 .room-img.small { width: 64px; flex: none; }
-.nft { color: var(--sky); font-weight: 700; font-size: var(--fs-xs); }
 .mats-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
 .section-title { margin: 6px 0 10px; }
 .section-title p { margin: 2px 0; }
@@ -377,8 +376,6 @@ main.scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; over
 .setting input[type="range"] { width: min(50%, 240px); accent-color: var(--gold); }
 .setting input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--gold); flex: none; }
 .about { margin-top: 16px; font-size: var(--fs-sm); }
-.log { font-size: var(--fs-sm); max-height: 50vh; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
-.log small { color: var(--muted); word-break: break-all; }
 
 /* ── Wallet ──────────────────────────────────────────── */
 .safety { margin: 6px 0 0; padding-left: 18px; color: var(--cream); font-size: var(--fs-sm); }

@@ -185,7 +185,6 @@ export function workshopScreen(app: App, params: Record<string, unknown>): Scree
               h("b", null, c.name),
               rarityBadge(c.rarity),
               h("small.muted", null, owned ? c.desc : sourceLabel(c)),
-              c.onchain ? h("small.nft", { title: "Предмет спроектирован под будущий NFT" }, "◎ NFT-ready") : null,
               owned
                 ? equipped
                   ? h("span.chip.done", null, "Надето")

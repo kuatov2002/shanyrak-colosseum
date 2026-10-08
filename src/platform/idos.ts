@@ -112,12 +112,12 @@ export class IdosBackend implements Backend {
   }
 
   async linkWallet(address: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>): Promise<{ ok: boolean; error?: string }> {
-    if (!this.client || !this.connected) return { ok: false, error: "Нет связи с iDos. Повторите, когда игра будет онлайн." };
+    if (!this.client || !this.connected) return { ok: false, error: "Нет связи с сервером. Повторите, когда игра будет онлайн." };
     const step1 = await this.client.auth.linkWallet(address, "solana");
     if (!step1.ok) return { ok: false, error: step1.error };
     if (step1.data.Linked) return { ok: true };
     const challenge = step1.data.Challenge;
-    if (!challenge) return { ok: false, error: "iDos не выдал challenge для подписи." };
+    if (!challenge) return { ok: false, error: "Сервер не ответил. Повторите позже." };
     const sig = await signMessage(new TextEncoder().encode(challenge));
     // Same encoding as @idosgames/wallet: 0x-prefixed hex of the raw signature bytes.
     const hex = "0x" + Array.from(sig, (b) => b.toString(16).padStart(2, "0")).join("");

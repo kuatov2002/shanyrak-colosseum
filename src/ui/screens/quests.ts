@@ -72,7 +72,7 @@ export function questsScreen(app: App, params: Record<string, unknown> = {}): Sc
     };
 
     if (tab === "daily") {
-      body.appendChild(h("p.muted", null, `Обновятся через ${formatCountdown(msToNextDay())} (00:00 UTC).`));
+      body.appendChild(h("p.muted", null, `Обновятся через ${formatCountdown(msToNextDay())}.`));
       for (const q of DAILY_QUESTS) body.appendChild(questRow("daily", q, d.daily.quests.find((x) => x.id === q.id)));
       const allClaimed = DAILY_QUESTS.every((q) => d.daily.quests.find((x) => x.id === q.id)?.claimed);
       body.appendChild(

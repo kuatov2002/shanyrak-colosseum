@@ -14,7 +14,7 @@ import { FACULTIES, FACULTY_IDS, weeklyStandings, type FacultyId, type FacultySt
 export type BoardId = "daily_tower" | "best_height" | "weekly_score";
 
 export const BOARD_INFO: Record<BoardId, { title: string; unit: string; desc: string }> = {
-  daily_tower: { title: "Ежедневная башня", unit: "очков", desc: "Один сид для всех на сутки (UTC). Лучший результат дня." },
+  daily_tower: { title: "Ежедневная башня", unit: "очков", desc: "Одна башня для всех на сутки. Лучший результат дня." },
   best_height: { title: "Рекорд высоты", unit: "этажей", desc: "Самая высокая башня за всё время." },
   weekly_score: { title: "Неделя кампуса", unit: "очков", desc: "Сумма очков всех раундов за неделю." },
 };
@@ -128,14 +128,14 @@ export class Leaderboards {
           demo: false,
         }));
         const me = rows.find((r) => r.me) ?? null;
-        let note = `Онлайн · iDos Games · ${res.total} участн.`;
+        let note = `Онлайн · ${res.total} участн.`;
         if (rows.length < 5) {
           const demo = rankRows(demoRows(board, key, 8));
           demo.forEach((r) => (r.rank = 0));
           note =
             rows.length === 0
-              ? "Онлайн-таблица пока пуста — сыграйте и станьте первым! Ниже — демо-соперники для наглядности (не настоящие игроки)."
-              : "Таблица только наполняется. Демо-соперники ниже не участвуют в рейтинге.";
+              ? "Таблица пока пуста — сыграйте и станьте первым!"
+              : "Таблица только наполняется — сыграйте и поднимитесь выше!";
           return { rows: [...rows, ...demo], source: "online", note, myRank: me?.rank ?? null };
         }
         return { rows, source: "online", note, myRank: me?.rank ?? null };
@@ -147,7 +147,7 @@ export class Leaderboards {
     rows.push({ name: `${myName} (вы)`, score: mine, rank: 0, me: true, demo: false });
     rankRows(rows);
     const me = rows.find((r) => r.me);
-    const note = "Оффлайн-режим: ваш результат среди демо-соперников. Онлайн-рейтинг iDos включится при подключении к сети.";
+    const note = "Нет связи — показан результат с этого устройства. Онлайн-таблица вернётся, когда игра подключится к сети.";
     return { rows, source: "offline", note, myRank: me && me.score > 0 ? me.rank : null };
   }
 

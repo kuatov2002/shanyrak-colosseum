@@ -51,7 +51,7 @@ export function settingsScreen(app: App): Screen {
       toggle("Вибрация", "На телефонах при укладке и обрушении", s.vibration, (v) => app.store.mutate((x) => (x.settings.vibration = v))),
       toggle("Меньше движения", "Без тряски экрана и вспышек, меньше частиц", s.reducedMotion, (v) => app.store.mutate((x) => (x.settings.reducedMotion = v))),
       toggle("Направляющая", "Пунктир от комнаты к башне на первых этажах", s.guide, (v) => app.store.mutate((x) => (x.settings.guide = v))),
-      toggle("Онлайн-рейтинги (iDos)", "Гостевой вход в iDos Games для общих лидербордов. Без него всё работает оффлайн.", s.online, (v) => {
+      toggle("Онлайн-рейтинги", "Гостевой вход для общих таблиц рекордов. Без него всё работает без сети.", s.online, (v) => {
         app.store.mutate((x) => (x.settings.online = v));
         if (v) void app.goOnline();
         else app.store.setSession({ online: "offline" });
@@ -64,14 +64,6 @@ export function settingsScreen(app: App): Screen {
         "div.row.wrap",
         null,
         button("🎓 Пройти обучение", () => app.startRound("tutorial"), { kind: "soft" }),
-        button("📊 Журнал событий", () => {
-          modal("Журнал аналитики", (body) => {
-            body.appendChild(h("p.muted", null, app.analytics.enabled ? "Эти события отправляются в iDos Analytics (если онлайн)." : "Аналитика выключена — события только локально."));
-            const list = h("div.log");
-            for (const e of app.analytics.log.slice(0, 25)) list.appendChild(h("div", null, h("b", null, e.name), h("small", null, ` ${JSON.stringify(e.params)}`)));
-            body.appendChild(list);
-          });
-        }, { kind: "soft" }),
         button("🗑️ Сбросить прогресс", () => {
           modal("Сбросить прогресс?", (body, close) => {
             body.append(
@@ -89,9 +81,8 @@ export function settingsScreen(app: App): Screen {
       h(
         "div.about",
         null,
-        h("p", null, h("b", null, "Шанырак: Кампус-Башня"), " · v0.1 · iDos Games × Solana Superteam Kazakhstan"),
-        h("p.muted", null, `Тайтл iDos: ${app.backend().titleId ?? "оффлайн"} · Состояние: ${app.store.session.online}${app.store.session.onlineError ? ` (${app.store.session.onlineError})` : ""}`),
-        h("p.muted", null, "Сохранение: локально на устройстве (версия сохранений 3). Шанырак в игре — символ завершения и общности."),
+        h("p", null, h("b", null, "Шанырак: Кампус-Башня"), " · v0.5 · iDos Games × Solana Superteam Kazakhstan"),
+        h("p.muted", null, "Прогресс хранится на этом устройстве. Шанырак в игре — символ завершения и общности."),
       ),
     );
   };

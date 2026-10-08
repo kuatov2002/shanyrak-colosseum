@@ -17,7 +17,7 @@ export function leaderboardsScreen(app: App, params: Record<string, unknown>): S
 
   const build = () => {
     shell.body.innerHTML = "";
-    shell.body.appendChild(screenIntro("🏆", "Рейтинг", "Онлайн-таблицы iDos Games. Ваш лучший результат попадает сюда сам после раунда — кошелёк не нужен."));
+    shell.body.appendChild(screenIntro("🏆", "Рейтинг", "Таблицы рекордов. Ваш лучший результат попадает сюда сам после раунда — кошелёк не нужен."));
     const tabs: [Tab, string][] = [
       ["daily_tower", "День"],
       ["best_height", "Высота"],
@@ -31,7 +31,7 @@ export function leaderboardsScreen(app: App, params: Record<string, unknown>): S
     shell.body.appendChild(body);
 
     if (tab === "faculties") {
-      void app.leaderboards.faculties().then(({ standings, online }) => {
+      void app.leaderboards.faculties().then(({ standings }) => {
         if (!alive) return;
         body.innerHTML = "";
         const max = Math.max(1, ...standings.map((s) => s.points));
@@ -54,17 +54,10 @@ export function leaderboardsScreen(app: App, params: Record<string, unknown>): S
                   null,
                   h("b", null, `«${f.name}»`, s.id === my ? h("small", null, " — ваш") : null),
                   h("div.bar", null, h("div.bar-fill", { style: { width: `${(s.points / max) * 100}%`, background: f.color } })),
-                  h("small.muted", null, `${fmt(s.points)} очков · реальных: ${fmt(s.real)}`),
+                  h("small.muted", null, `${fmt(s.points)} очков`),
                 ),
               );
             }),
-          ),
-          h(
-            "p.note",
-            null,
-            online
-              ? "Реальные очки — сумма недельных таблиц iDos faculty_*. Остальное — симуляция активности кампуса (одинакова для всех), чтобы война шла с первого дня."
-              : "Оффлайн: реальны только ваши очки. Остальные факультеты — детерминированная симуляция недели (одинакова для всех игроков).",
           ),
           my ? button("🚩 Сыграть за факультет", () => app.startRound("faculty"), { kind: "gold" }) : button("Выбрать факультет", () => app.router.go("faculty"), { kind: "gold" }),
         );
@@ -108,7 +101,7 @@ export function leaderboardsScreen(app: App, params: Record<string, unknown>): S
     }).catch(() => {
       if (!alive) return;
       body.innerHTML = "";
-      body.append(emptyState("cloud", "Таблица не загрузилась", "Похоже, нет связи. Результаты сохраняются на устройстве и попадут сюда позже.", { label: "↻ Повторить", onClick: build, kind: "soft" }));
+      body.append(emptyState("cloud", "Таблица не загрузилась", "Похоже, нет связи. Проверьте интернет и попробуйте ещё раз.", { label: "↻ Повторить", onClick: build, kind: "soft" }));
     });
   };
   build();

@@ -17,7 +17,9 @@ interface Endpoint {
 
 export class RpcUnavailableError extends Error {
   constructor(detail: string) {
-    super(`Сеть Solana недоступна (${detail}). Игра продолжает работать — повторите позже.`);
+    super("Сеть Solana недоступна. Игра продолжает работать — повторите позже.");
+    // which endpoints failed and why: for the console, not for players
+    console.warn("[shanyrak] Solana RPC unavailable:", detail);
   }
 }
 

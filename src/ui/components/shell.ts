@@ -60,7 +60,7 @@ export function topBar(app: App): HTMLElement {
         {
           type: "button",
           onclick: () => openInfo(app, "online"),
-          title: online === "online" ? "Онлайн: iDos Games" : online === "connecting" ? "Подключение…" : "Оффлайн: всё сохраняется локально",
+          title: online === "online" ? "Онлайн: рейтинги работают" : online === "connecting" ? "Подключение…" : "Оффлайн: прогресс сохраняется на устройстве",
           class: `net-${online}`,
         },
         online === "online" ? "онлайн" : online === "connecting" ? "…" : "оффлайн",

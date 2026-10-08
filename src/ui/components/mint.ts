@@ -33,7 +33,7 @@ export function openMintDialog(app: App, id: string): void {
             h("div", null, h("span", null, "Комиссия сети"), h("b", null, fmtSol(p.feeLamports))),
             h("small.muted", null, `Платится валидаторам Solana и не возвращается. Включает приоритет ${fmtSol(p.priorityLamports)}, чтобы транзакция не потерялась в загруженной сети.`),
             h("div.total", null, h("span", null, "Итого спишется сейчас"), h("b", null, fmtSol(p.rentLamports + p.feeLamports))),
-            h("small.muted", null, `На кошельке: ${fmtSol(p.balanceLamports)} · транзакция проверена симуляцией в mainnet`),
+            h("small.muted", null, `На кошельке: ${fmtSol(p.balanceLamports)} · транзакция проверена`),
           ),
         );
       }
@@ -85,7 +85,7 @@ export function mintAvailability(app: App, id: string): { can: boolean; reason: 
   const d = app.store.data;
   if (d.wallet.minted[id]) return { can: false, reason: "Уже выпущен" };
   if (!d.achievements[id]) return { can: false, reason: "Сначала получите достижение" };
-  if (!metadataBase()) return { can: false, reason: "Работает в опубликованной версии на iDos" };
+  if (!metadataBase()) return { can: false, reason: "Сейчас недоступно" };
   if (!app.wallet.address) return { can: false, reason: "Подключите кошелёк" };
   return { can: true, reason: "" };
 }

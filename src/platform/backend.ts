@@ -45,7 +45,7 @@ export class LocalBackend implements Backend {
   }
   async setName(): Promise<void> {}
   async linkWallet(): Promise<{ ok: boolean; error?: string }> {
-    return { ok: false, error: "Нужен онлайн-вход iDos: включите «Онлайн-рейтинги» в настройках и проверьте сеть." };
+    return { ok: false, error: "Нужен онлайн-режим: включите «Онлайн-рейтинги» в настройках и проверьте сеть." };
   }
   logEvent(): void {}
 }

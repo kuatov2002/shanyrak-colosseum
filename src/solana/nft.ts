@@ -60,7 +60,7 @@ export function estimateAssetSize(name: string, uri: string): number {
 async function loadBuffer(): Promise<typeof import("buffer").Buffer> {
   const mod = (await import("buffer")) as unknown as { Buffer?: typeof import("buffer").Buffer; default?: { Buffer?: typeof import("buffer").Buffer } };
   const B = mod.Buffer ?? mod.default?.Buffer;
-  if (!B) throw new MintError("Не удалось загрузить модуль Buffer.", "config");
+  if (!B) throw new MintError("Не удалось подготовить транзакцию. Обновите страницу и повторите.", "config");
   return B;
 }
 
@@ -130,7 +130,7 @@ export async function prepareMint(owner: string, id: string): Promise<PreparedMi
   const badge = badges.badges.find((b) => b.id === id);
   if (!badge) throw new MintError("Этот значок нельзя сминтить.", "config");
   const uri = metadataUri(id);
-  if (!uri) throw new MintError("Минт доступен только в опубликованной на iDos версии игры (нужен постоянный адрес метаданных).", "config");
+  if (!uri) throw new MintError("Выпуск значков сейчас недоступен.", "config");
   const web3 = await import("@solana/web3.js");
   const Buffer = await loadBuffer();
   const conn = await rpc.connection();
@@ -180,7 +180,7 @@ export async function prepareMint(owner: string, id: string): Promise<PreparedMi
     const acc = sim.value.accounts?.[0];
     if (acc?.data?.[0]) size = base64Length(acc.data[0]);
   } else if (!/AccountNotFound|InsufficientFunds|insufficient/i.test(errText + logs.join(" "))) {
-    throw new MintError(`Симуляция отклонила транзакцию: ${errText.slice(0, 120)}. Ничего не отправлено.`, "program");
+    throw new MintError(`Проверка не пропустила транзакцию. Ничего не отправлено — повторите позже.`, "program");
   }
   const rentLamports = await conn.getMinimumBalanceForRentExemption(size);
   const affordable = simulated && balanceLamports >= rentLamports + feeLamports;
@@ -254,7 +254,7 @@ export async function executeMint(p: PreparedMint, adapter: WalletAdapter, onSen
   for (let i = 0; Date.now() - started < 150_000; i++) {
     await sleep(i === 0 ? 1200 : 1600);
     const s = (await conn.getSignatureStatuses([signature])).value[0];
-    if (s?.err) throw new MintError(`Транзакция отклонена сетью: ${JSON.stringify(s.err).slice(0, 100)}. Списана только комиссия сети.`, "program");
+    if (s?.err) throw new MintError(`Сеть отклонила транзакцию. Списана только комиссия сети.`, "program");
     if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")) return signature;
     if (i % 3 === 2 && (await landed())) return signature;
     if (raw && Date.now() - lastSend > 2000) {

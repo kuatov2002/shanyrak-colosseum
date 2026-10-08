@@ -65,8 +65,8 @@ export async function fetchSolBalance(owner: string): Promise<BalanceResult> {
 export function describeRpcError(err: unknown): string {
   if (err instanceof RpcUnavailableError) return err.message;
   const msg = err instanceof Error ? err.message : String(err);
-  if (/403|forbidden/i.test(msg)) return "RPC отклонил запрос. Повторите позже — игра продолжает работать.";
-  if (/429|too many/i.test(msg)) return "Слишком много запросов к RPC. Повторите через минуту.";
+  if (/403|forbidden/i.test(msg)) return "Сеть Solana отклонила запрос. Повторите позже — игра продолжает работать.";
+  if (/429|too many/i.test(msg)) return "Сеть Solana перегружена. Повторите через минуту.";
   if (/fetch|network|Failed to|недоступна/i.test(msg)) return "Сеть Solana недоступна. Игра продолжает работать — повторите позже.";
   return msg.length > 140 ? `${msg.slice(0, 140)}…` : msg;
 }
