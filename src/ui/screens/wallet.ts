@@ -161,7 +161,9 @@ export function walletScreen(app: App): Screen {
 
     // ③ Optional profile link
     const link = app.actions.get("link");
-    const linked = d.wallet.linkedToProfile && d.wallet.address === w.address;
+    const account = app.store.session.account;
+    const walletAccount = account?.kind === "wallet";
+    const linked = walletAccount || (d.wallet.linkedToProfile && d.wallet.address === w.address);
     const step3 = h(
       `div.wallet-step${linked ? ".done" : ""}`,
       null,
@@ -169,19 +171,21 @@ export function walletScreen(app: App): Screen {
       h(
         "div.ws-body",
         null,
-        h("b", null, "Необязательно: привяжите кошелёк к профилю"),
-        h("small.muted", null, "Бесплатная подпись сообщения (не транзакция): профиль запомнит, что этот кошелёк ваш."),
+        h("b", null, walletAccount ? "Ваш аккаунт — этот кошелёк" : "Необязательно: привяжите кошелёк к профилю"),
+        h("small.muted", null, walletAccount ? "Вы вошли кошельком: он уже связан с профилем, подписывать ничего не нужно." : "Бесплатная подпись сообщения (не транзакция): профиль запомнит, что этот кошелёк ваш."),
         link.message ? h(`p.ac-msg${link.status === "error" ? ".error" : ""}`, null, link.message) : "",
         h(
           "div.row",
           null,
           linked
             ? h("span.status-chip.st-success", null, "✅ Привязан")
-            : button(link.status === "error" ? "↻ Повторить" : "Подписать и привязать", () => void app.actions.linkProfile(), {
+            : !account || account.kind === "guest"
+              ? button("◎ Войти в аккаунт", () => app.router.go("login", { upgrade: true }), { kind: "gold" })
+              : button(link.status === "error" ? "↻ Повторить" : "Подписать и привязать", () => void app.actions.linkProfile(), {
                 kind: "primary",
                 disabled: !w.address || app.actions.busy("link"),
               }),
-          !w.address ? h("small.muted", null, "Сначала подключите кошелёк") : app.store.session.online !== "online" ? h("small.muted", null, "Нужно подключение к сети") : "",
+          !account || account.kind === "guest" ? h("small.muted", null, "Гостевой профиль нельзя связать с кошельком — войдите") : !w.address ? h("small.muted", null, "Сначала подключите кошелёк") : app.store.session.online !== "online" ? h("small.muted", null, "Нужно подключение к сети") : "",
         ),
       ),
     );

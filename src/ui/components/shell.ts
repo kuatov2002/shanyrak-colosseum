@@ -38,6 +38,19 @@ function shaiCount(value: number): HTMLElement {
   return el;
 }
 
+/** "Войти" when nobody is signed in (online mode), a quieter "Гость · Войти" for guests. */
+function accountChip(app: App): HTMLElement | null {
+  const s = app.store.session;
+  if (!app.store.data.settings.online || s.online === "connecting") return null;
+  const guest = s.account?.kind === "guest";
+  if (s.account && !guest) return null;
+  return h(
+    `button.account-chip${guest ? ".guest" : ""}`,
+    { type: "button", onclick: () => app.router.go("login", guest ? { upgrade: true } : {}), title: "Войти: кошелёк, iDos Games или почта" },
+    guest ? "Гость · Войти" : "◎ Войти",
+  );
+}
+
 export function topBar(app: App): HTMLElement {
   const d = app.store.data;
   const fac = d.player.faculty ? FACULTIES[d.player.faculty] : null;
@@ -55,6 +68,7 @@ export function topBar(app: App): HTMLElement {
     h(
       "div.topbar-right",
       null,
+      accountChip(app),
       h(
         "button.net-dot",
         {

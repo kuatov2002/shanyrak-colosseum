@@ -10,6 +10,7 @@
 //   client.auth.linkWallet(address, "solana", signature?)  (two-step challenge → signature)
 //   client.analytics.logEvent(name, params, value)
 
+import { explainAuthError, kindOf, walletLogin, type AccountInfo, type AuthResult } from "./account";
 import type { Backend, BoardResult } from "./backend";
 
 type IdosClient = import("@idosgames/core").IDosGamesClient;
@@ -65,31 +66,153 @@ export class IdosBackend implements Backend {
     return this.client?.auth.context?.userID ?? null;
   }
 
-  async connect(): Promise<{ ok: boolean; error?: string }> {
-    try {
-      if (!this.client) {
-        const { createIDosGamesClient } = await import("@idosgames/core");
-        this.client = createIDosGamesClient({ titleID: this.titleId, throttleMs: 0 });
-      }
-      const client = this.client;
-      if (client.auth.isLoggedIn) {
-        this.connected = true;
-        return { ok: true };
-      }
-      const auto = await withTimeout(client.auth.autoLogin(), 8000);
-      if (auto && auto.ok) {
-        this.connected = true;
-        return { ok: true };
-      }
-      const guest = await withTimeout(client.auth.loginWithDeviceID(), 10000);
-      if (guest && guest.ok) {
-        this.connected = true;
-        return { ok: true };
-      }
-      return { ok: false, error: guest && !guest.ok ? guest.error : "timeout" };
-    } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  /** The SDK client, created on first use (the SDK chunk loads lazily). */
+  async sdk(): Promise<IdosClient> {
+    if (!this.client) {
+      const { createIDosGamesClient } = await import("@idosgames/core");
+      this.client = createIDosGamesClient({ titleID: this.titleId, throttleMs: 0 });
     }
+    return this.client;
+  }
+
+  /** The signed-in account, as the SDK remembers it. */
+  get account(): AccountInfo | null {
+    if (!this.client || !this.connected) return null;
+    const kind = kindOf(this.client.auth.lastAuthType);
+    return kind ? { kind } : null;
+  }
+
+  /**
+   * Restore a session without asking the player: an SSO code from idosgames.com first, then the
+   * remembered session (refresh token / replayable method). Never creates a guest by itself:
+   * needsLogin means the player has to pick a method on the sign-in screen.
+   */
+  async resume(): Promise<{ ok: true; account: AccountInfo } | { ok: false; needsLogin: boolean; error?: string }> {
+    try {
+      const client = await this.sdk();
+      const { readSsoCodeFromUrl } = await import("@idosgames/core");
+      const sso = readSsoCodeFromUrl();
+      if (sso) {
+        const res = await withTimeout(client.auth.loginWithSsoCode(sso.code), 10000);
+        if (res && res.ok) return this.signedIn({ kind: "idos" });
+        return { ok: false, needsLogin: true, error: explainAuthError(res ? res.error : "timeout") };
+      }
+      if (client.auth.isLoggedIn) return this.signedIn({ kind: kindOf(client.auth.lastAuthType) ?? "guest" });
+      if (client.auth.lastAuthType === "None") return { ok: false, needsLogin: true };
+      // a few quick retries on a flaky connection before giving up on the remembered session
+      let res = await withTimeout(client.auth.autoLogin(), 8000);
+      for (const wait of [1200, 2500]) {
+        if (!res || res.ok || res.reason !== "connection") break;
+        await new Promise((r) => setTimeout(r, wait));
+        res = await withTimeout(client.auth.autoLogin(), 8000);
+      }
+      if (res && res.ok) return this.signedIn({ kind: kindOf(client.auth.lastAuthType) ?? "guest" });
+      const offline = !res || res.reason === "connection";
+      return { ok: false, needsLogin: !offline, error: explainAuthError(res ? res.error : "timeout") };
+    } catch (err) {
+      return { ok: false, needsLogin: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /** Backend interface: connect = resume (there is no silent guest any more). */
+  async connect(): Promise<{ ok: boolean; error?: string }> {
+    const res = await this.resume();
+    return res.ok ? { ok: true } : { ok: false, error: res.error };
+  }
+
+  private signedIn(account: AccountInfo): { ok: true; account: AccountInfo } {
+    this.connected = true;
+    return { ok: true, account };
+  }
+
+  private async run(remember: boolean, login: (c: IdosClient) => Promise<{ ok: boolean; error?: string }>, account: AccountInfo): Promise<AuthResult> {
+    try {
+      const client = await this.sdk();
+      client.auth.setRememberSession(remember);
+      const res = await withTimeout(login(client), 20000);
+      if (!res) return { ok: false, error: explainAuthError("timeout") };
+      if (!res.ok) return { ok: false, error: explainAuthError(res.error) };
+      this.connected = true;
+      return { ok: true, account };
+    } catch (err) {
+      return { ok: false, error: explainAuthError(err instanceof Error ? err.message : String(err)) };
+    }
+  }
+
+  loginGuest(remember: boolean): Promise<AuthResult> {
+    return this.run(remember, (c) => c.auth.loginWithDeviceID(), { kind: "guest" });
+  }
+
+  loginEmail(email: string, password: string, remember: boolean): Promise<AuthResult> {
+    return this.run(remember, (c) => c.auth.loginWithEmail(email, password), { kind: "email" });
+  }
+
+  confirmEmail(email: string, code: string, remember: boolean): Promise<AuthResult> {
+    return this.run(remember, (c) => c.auth.confirmEmailRegistration(email, code.trim()), { kind: "email" });
+  }
+
+  loginTelegram(remember: boolean): Promise<AuthResult> {
+    return this.run(remember, (c) => c.auth.loginWithTelegram(), { kind: "telegram" });
+  }
+
+  /** Start an e-mail registration: the server mails a code; the account appears on confirmEmail. */
+  async registerEmail(email: string, password: string, remember: boolean): Promise<{ ok: true; resendIn: number } | { ok: false; error: string }> {
+    try {
+      const client = await this.sdk();
+      client.auth.setRememberSession(remember);
+      const res = await client.auth.registerWithEmail(email, password);
+      if (!res.ok) return { ok: false, error: explainAuthError(res.error) };
+      const data = res.data as { resendCooldownSeconds?: number };
+      return { ok: true, resendIn: data.resendCooldownSeconds && data.resendCooldownSeconds > 0 ? data.resendCooldownSeconds : 60 };
+    } catch (err) {
+      return { ok: false, error: explainAuthError(err instanceof Error ? err.message : String(err)) };
+    }
+  }
+
+  async resendCode(email: string): Promise<string | null> {
+    const res = await (await this.sdk()).auth.resendVerificationCode(email);
+    return res.ok ? null : explainAuthError(res.error);
+  }
+
+  async forgotPassword(email: string): Promise<string | null> {
+    const res = await (await this.sdk()).auth.forgotPassword(email);
+    return !res.ok && res.error === "EMAIL_SENDER_NOT_CONFIGURED" ? explainAuthError(res.error) : null;
+  }
+
+  async resetPassword(email: string, code: string, password: string): Promise<string | null> {
+    const res = await (await this.sdk()).auth.resetPassword(email, code.trim(), password);
+    return res.ok ? null : explainAuthError(res.error);
+  }
+
+  /** Solana wallet sign-in (see platform/account.ts). */
+  async loginWallet(wallet: { address: string; signMessage: (m: Uint8Array) => Promise<Uint8Array> } | null, remember: boolean): Promise<AuthResult> {
+    const client = await this.sdk();
+    client.auth.setRememberSession(remember);
+    const res = await walletLogin(client, wallet);
+    if (res.ok) this.connected = true;
+    return res;
+  }
+
+  /**
+   * «Войти через iDos Games»: resume a live platform session if there is one, otherwise go to
+   * idosgames.com/sso, which comes back here with a one-time code (handled by resume()).
+   */
+  async loginIdos(remember: boolean): Promise<AuthResult | "redirecting"> {
+    const client = await this.sdk();
+    client.auth.setRememberSession(remember);
+    if (client.auth.lastAuthType === "iDosGames") {
+      const res = await withTimeout(client.auth.autoLogin(), 8000);
+      if (res && res.ok) return this.signedIn({ kind: "idos" });
+    }
+    const { beginSsoRedirect } = await import("@idosgames/core");
+    beginSsoRedirect({ titleID: client.titleID });
+    return "redirecting";
+  }
+
+  /** Sign out: the next launch opens the sign-in screen. */
+  logout(): void {
+    this.client?.auth.logout();
+    this.connected = false;
   }
 
   async submitScore(boardId: string, score: number): Promise<{ ok: boolean; error?: string }> {

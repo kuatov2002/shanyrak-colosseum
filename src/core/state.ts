@@ -8,12 +8,14 @@ export interface SessionState {
   online: "offline" | "connecting" | "online";
   onlineError: string | null;
   userId: string | null;
+  /** Signed-in account for this session (null = not signed in / offline). */
+  account: { kind: "wallet" | "idos" | "email" | "guest" | "telegram"; address?: string } | null;
   lastResult: unknown;
 }
 
 export class Store {
   data: SaveData;
-  session: SessionState = { online: "offline", onlineError: null, userId: null, lastResult: null };
+  session: SessionState = { online: "offline", onlineError: null, userId: null, account: null, lastResult: null };
   readonly changed = new Emitter<void>();
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
 

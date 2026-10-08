@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@idosgames/core": "^0.21.2",
+    "@idosgames/wallet": "0.6.2",
     "@solana/web3.js": "^1.99.0",
     "@wallet-standard/app": "^1.1.1",
     "bs58": "^6.0.0",

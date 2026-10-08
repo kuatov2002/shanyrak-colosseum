@@ -6,6 +6,7 @@ import type { Store } from "../core/state";
 import type { Round } from "../gameplay/round";
 import type { ModeId } from "../gameplay/types";
 import type { RoundSummary } from "../meta/progression";
+import type { AuthResult } from "../platform/account";
 import type { Backend } from "../platform/backend";
 import type { MenuScene } from "../render/menuScene";
 import type { PixiRenderer } from "../render/world";
@@ -27,10 +28,30 @@ export type ScreenId =
   | "quests"
   | "profile"
   | "settings"
-  | "wallet";
+  | "wallet"
+  | "login";
 
 export interface StartOptions {
   missionIndex?: number;
+}
+
+/** Sign-in actions for the login screen (implemented in game.ts around IdosBackend). */
+export interface AccountApi {
+  /** Wallet sign-in; optionId picks one of app.wallet.options() (ignored inside idosgames.com). */
+  wallet(optionId: string | null, remember: boolean): Promise<AuthResult>;
+  idos(remember: boolean): Promise<AuthResult | "redirecting">;
+  email(email: string, password: string, remember: boolean): Promise<AuthResult>;
+  register(email: string, password: string, remember: boolean): Promise<{ ok: true; resendIn: number } | { ok: false; error: string }>;
+  confirm(email: string, code: string, remember: boolean): Promise<AuthResult>;
+  resend(email: string): Promise<string | null>;
+  forgot(email: string): Promise<string | null>;
+  reset(email: string, code: string, password: string): Promise<string | null>;
+  telegram(remember: boolean): Promise<AuthResult>;
+  guest(remember: boolean): Promise<AuthResult>;
+  /** Leave the sign-in screen for the game (tutorial for new players). */
+  proceed(): void;
+  /** Sign out and show the sign-in screen. */
+  logout(): void;
 }
 
 export interface App {
@@ -49,6 +70,7 @@ export interface App {
   startRound(mode: ModeId, opts?: StartOptions): void;
   endRoundEarly(): void;
   goOnline(): Promise<void>;
+  account: AccountApi;
   refreshMenuScene(): void;
 }
 

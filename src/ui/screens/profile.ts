@@ -29,13 +29,14 @@ export function profileScreen(app: App): Screen {
           field("Имя", d.player.name),
           field("Факультет", fac ? `«${fac.name}» — ${fac.field}` : "не выбран"),
           field("ID", d.player.id.slice(0, 10).toUpperCase()),
-          field("Кошелёк", addr ? shortAddress(addr) : "гостевой режим"),
-          field("Привязка", d.wallet.linkedToProfile ? "✓ кошелёк в профиле" : "нет"),
+          field("Аккаунт", accountLabel(app)),
+          field("Кошелёк", addr ? shortAddress(addr) : "не подключён"),
           field("Значки-NFT", `${Object.keys(d.wallet.minted).length}/4`),
         ),
       ),
       h("div.sc-foot", null, `Поступил(а): ${new Date(d.createdAt).toLocaleDateString("ru-RU")} · Сезон: ур. ${seasonTier(d.season.xp)}/${SEASON_TIERS.length}`),
     );
+    const signedIn = !!app.store.session.account;
     const st = d.stats;
     shell.body.append(
       h("div.back-row", null, button("← Кампус", () => app.router.go("home"), { kind: "ghost" })),
@@ -46,6 +47,9 @@ export function profileScreen(app: App): Screen {
         button("✏️ Изменить имя", () => renameDialog(app), { kind: "soft" }),
         button("🚩 Сменить факультет", () => app.router.go("faculty", { next: "profile" }), { kind: "soft" }),
         button(addr ? "◎ Кошелёк" : "◎ Подключить кошелёк", () => app.router.go("wallet"), { kind: "primary" }),
+        signedIn && app.store.session.account?.kind !== "guest"
+          ? button("Сменить аккаунт", () => app.account.logout(), { kind: "ghost" })
+          : button("◎ Войти в аккаунт", () => app.router.go("login", { upgrade: true }), { kind: "gold" }),
       ),
       h(
         "div.stat-grid",
@@ -101,4 +105,22 @@ function renameDialog(app: App): void {
     );
     setTimeout(() => input.focus(), 50);
   });
+}
+
+/** Who the player is signed in as, in a few words. */
+function accountLabel(app: App): string {
+  const a = app.store.session.account;
+  if (!a) return app.store.data.settings.online ? "вход не выполнен" : "без сети";
+  switch (a.kind) {
+    case "wallet":
+      return a.address ? `кошелёк ${shortAddress(a.address)}` : "кошелёк Solana";
+    case "idos":
+      return "iDos Games";
+    case "email":
+      return "почта";
+    case "telegram":
+      return "Telegram";
+    default:
+      return "гость";
+  }
 }

@@ -16,6 +16,7 @@ import { Round } from "./gameplay/round";
 import type { ModeId, RoundEvent, RoundResult } from "./gameplay/types";
 import { applyRoundResult, checkAchievements, rememberTower } from "./meta/progression";
 import { LocalBackend, type Backend } from "./platform/backend";
+import { embeddedInPlatform, explainAuthError, ssoCodePending, type AccountInfo, type AuthResult } from "./platform/account";
 import { IdosBackend } from "./platform/idos";
 import { MenuScene } from "./render/menuScene";
 import { PixiRenderer } from "./render/world";
@@ -25,7 +26,7 @@ import { ensureWeekly } from "./retention/weekly";
 import { Leaderboards } from "./social/leaderboards";
 import { SolanaActions } from "./solana/actions";
 import { WalletManager } from "./solana/wallet";
-import { Router, type App, type ScreenId, type StartOptions } from "./ui/app";
+import { Router, type AccountApi, type App, type ScreenId, type StartOptions } from "./ui/app";
 import { button, toast } from "./ui/components/common";
 import { bootDone, bootProgress } from "./ui/boot";
 import { h } from "./ui/dom";
@@ -33,6 +34,7 @@ import { campaignScreen } from "./ui/screens/campaign";
 import { facultyScreen } from "./ui/screens/faculty";
 import { homeScreen, openStreak } from "./ui/screens/home";
 import { leaderboardsScreen } from "./ui/screens/leaderboards";
+import { loginScreen } from "./ui/screens/login";
 import { profileScreen } from "./ui/screens/profile";
 import { questsScreen } from "./ui/screens/quests";
 import { resultScreen } from "./ui/screens/result";
@@ -130,6 +132,72 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
 
   let detachRound: (() => void)[] = [];
 
+  // ── Account: sign-in methods for the login screen (see platform/account.ts) ─────────────
+  const withSignIn = async (res: Promise<AuthResult>): Promise<AuthResult> => {
+    const r = await res;
+    if (r.ok) onSignedIn(r.account);
+    return r;
+  };
+  const enableOnline = () => {
+    if (!store.data.settings.online) store.mutate((s) => (s.settings.online = true));
+  };
+  const accountApi: AccountApi = {
+    async wallet(optionId, remember) {
+      enableOnline();
+      let signer: { address: string; signMessage: (m: Uint8Array) => Promise<Uint8Array> } | null = null;
+      if (!(await embeddedInPlatform())) {
+        if (!optionId) return { ok: false, error: explainAuthError("NO_WALLET") };
+        const connected = await wallet.connect(optionId);
+        const adapter = wallet.adapter;
+        if (!connected || !adapter || !wallet.address) return { ok: false, error: wallet.error ?? explainAuthError("NO_WALLET") };
+        signer = { address: wallet.address, signMessage: (m) => adapter.signMessage(m) };
+      }
+      const r = await idos.loginWallet(signer, remember);
+      if (r.ok) {
+        const address = signer?.address;
+        onSignedIn({ kind: "wallet", address });
+        // the wallet IS the account: it is linked to the profile by this very signature
+        if (address) store.mutate((s) => { s.wallet.address = address; s.wallet.linkedToProfile = true; });
+      }
+      return r;
+    },
+    async idos(remember) {
+      enableOnline();
+      const r = await idos.loginIdos(remember);
+      if (r !== "redirecting" && r.ok) onSignedIn(r.account);
+      return r;
+    },
+    email: (email, password, remember) => (enableOnline(), withSignIn(idos.loginEmail(email, password, remember))),
+    register: (email, password, remember) => (enableOnline(), idos.registerEmail(email, password, remember)),
+    confirm: (email, code, remember) => withSignIn(idos.confirmEmail(email, code, remember)),
+    resend: (email) => idos.resendCode(email),
+    forgot: (email) => idos.forgotPassword(email),
+    reset: (email, code, password) => idos.resetPassword(email, code, password),
+    telegram: (remember) => (enableOnline(), withSignIn(idos.loginTelegram(remember))),
+    async guest(remember) {
+      if (store.session.account?.kind === "guest") return { ok: true, account: { kind: "guest" } };
+      const r = await withSignIn(idos.loginGuest(remember));
+      if (r.ok) return r;
+      // no network: a guest can always play — progress is on this device, boards come later
+      store.mutate((s) => (s.account = { kind: "guest", at: Date.now() }));
+      toast("Нет связи — играем без сети. Войти можно позже в профиле.", "info");
+      return { ok: true, account: { kind: "guest" } };
+    },
+    proceed() {
+      if (!store.data.account) store.mutate((s) => (s.account = { kind: "guest", at: Date.now() }));
+      if (!store.data.tutorialDone && opts.autoTutorial !== false) startRound("tutorial");
+      else router.go("home");
+    },
+    logout() {
+      idos.logout();
+      backend = new LocalBackend();
+      store.setSession({ online: "offline", userId: null, account: null, onlineError: null });
+      store.mutate((s) => (s.account = null));
+      void wallet.disconnect();
+      router.go("login");
+    },
+  };
+
   const app: App = {
     store,
     sound,
@@ -146,6 +214,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
     startRound,
     endRoundEarly,
     goOnline,
+    account: accountApi,
     refreshMenuScene,
   };
   router.app = app;
@@ -162,6 +231,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
   router.register("profile", profileScreen);
   router.register("settings", settingsScreen);
   router.register("wallet", walletScreen);
+  router.register("login", loginScreen);
 
 
   router.onNavigate = (id: ScreenId) => {
@@ -323,20 +393,45 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
 
   // ── Online (iDos) ─────────────────────────────────────────────────────────
 
+  /** Restore the session (SSO code from idosgames.com, remembered session); never a silent guest. */
   async function goOnline(): Promise<void> {
     if (!store.data.settings.online) return;
     store.setSession({ online: "connecting", onlineError: null });
-    const res = await idos.connect();
+    const res = await idos.resume();
     if (res.ok) {
-      backend = idos;
-      store.setSession({ online: "online", userId: idos.userId, onlineError: null });
-      void idos.setName(store.data.player.name);
-      // warm the board cache in the background so the Rating screen opens instantly
-      setTimeout(() => void leaderboards.prefetch(), 2500);
-    } else {
-      backend = new LocalBackend();
-      store.setSession({ online: "offline", onlineError: res.error ?? null });
-      // Offline is a normal mode (no network / iDos disabled): the reason is shown in Settings.
+      onSignedIn(res.account);
+      // signed in already (e.g. came from idosgames.com): the sign-in screen has nothing to ask
+      if (router.current?.id === "login" && res.account.kind !== "guest") accountApi.proceed();
+      return;
+    }
+    backend = new LocalBackend();
+    store.setSession({ online: "offline", account: null, onlineError: res.error ?? null });
+    // the remembered session is gone (expired, signed out elsewhere): ask again, never mid-round
+    if (res.needsLogin && store.data.account && store.data.account.kind !== "guest" && router.current?.id === "home") {
+      router.go("login", { notice: "Сессия завершилась — войдите снова." });
+    }
+  }
+
+  const GUEST_INVITE_MS = 24 * 3600 * 1000;
+  function onSignedIn(account: AccountInfo): void {
+    backend = idos;
+    store.setSession({ online: "online", userId: idos.userId, onlineError: null, account });
+    const prev = store.data.account;
+    store.mutate((s) => {
+      s.account = { kind: account.kind, address: account.address ?? (account.kind === prev?.kind ? prev?.address : undefined), at: Date.now(), invitedAt: prev?.invitedAt };
+    });
+    void idos.setName(store.data.player.name);
+    analytics.track("login", { method: account.kind });
+    // warm the board cache in the background so the Rating screen opens instantly
+    setTimeout(() => void leaderboards.prefetch(), 2500);
+    // guests get a gentle invitation to sign in properly, at most once a day, only on the hub
+    const invited = store.data.account?.invitedAt ?? 0;
+    if (account.kind === "guest" && Date.now() - invited > GUEST_INVITE_MS) {
+      setTimeout(() => {
+        if (router.current?.id !== "home" || document.querySelector(".modal-backdrop")) return;
+        store.mutate((s) => { if (s.account) s.account.invitedAt = Date.now(); });
+        router.go("login", { upgrade: true });
+      }, 1500);
     }
   }
 
@@ -452,7 +547,11 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
   // ── Boot ──────────────────────────────────────────────────────────────────
 
   checkAchievements(store);
-  if (!store.data.tutorialDone && opts.autoTutorial !== false) {
+  // The first launch (or a player who never chose) opens on the sign-in screen — unless a sign-in
+  // code from idosgames.com is waiting, which resume() turns into the iDos Games account.
+  if (store.data.settings.online && !store.data.account && !ssoCodePending()) {
+    router.go("login", { first: true });
+  } else if (!store.data.tutorialDone && opts.autoTutorial !== false) {
     startRound("tutorial");
   } else {
     router.go("home");

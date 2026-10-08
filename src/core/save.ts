@@ -72,6 +72,12 @@ export interface SaveData {
   walletPromptDismissed: boolean;
   /** The "how the campus works" guide was shown once after the tutorial. */
   guideSeen: boolean;
+  /**
+   * How the player chose to sign in (null = never asked yet → the sign-in screen opens first).
+   * The session itself is the SDK's; this only remembers the choice and when a guest was last
+   * invited to sign in.
+   */
+  account: { kind: "wallet" | "idos" | "email" | "guest" | "telegram"; address?: string; at: number; invitedAt?: number } | null;
   shai: number;
   materials: Materials;
   upgrades: UpgradeLevels;
@@ -172,6 +178,7 @@ export function defaultSave(): SaveData {
     war: { lastRewardWeek: "" },
     settings: { music: 0.5, sfx: 0.8, ambient: 0.6, vibration: true, reducedMotion: false, guide: true, online: true, analytics: true },
     wallet: { address: null, walletName: null, linkedToProfile: false, records: [], minted: {}, pendingMints: {} },
+    account: null,
   };
 }
 
