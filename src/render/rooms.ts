@@ -223,6 +223,204 @@ function drawStudent(ctx: CanvasRenderingContext2D, x: number, y: number, s: num
   }
 }
 
+/** Moulded window surround (наличник): outer arch band, keystone and the lintel shadow under it. */
+function drawSurround(ctx: CanvasRenderingContext2D, cx: number, wx: number, wy: number, ww: number, wh: number, c: Colors): void {
+  const r = ww / 2 + 2.6;
+  ctx.strokeStyle = rgba(shade(c.trim, 0.25), 0.9);
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(wx - 2.6, wy + wh);
+  ctx.lineTo(wx - 2.6, wy + ww / 2);
+  ctx.arc(cx, wy + ww / 2, r, Math.PI, 0);
+  ctx.lineTo(wx + ww + 2.6, wy + wh);
+  ctx.stroke();
+  ctx.strokeStyle = rgba("#000000", 0.14);
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.arc(cx, wy + ww / 2 + 0.9, r + 0.9, Math.PI * 1.08, Math.PI * 1.92);
+  ctx.stroke();
+  // keystone
+  const ky = wy + ww / 2 - r;
+  ctx.fillStyle = shade(c.trim, 0.3);
+  ctx.beginPath();
+  ctx.moveTo(cx - 2.2, ky - 1.6);
+  ctx.lineTo(cx + 2.2, ky - 1.6);
+  ctx.lineTo(cx + 1.5, ky + 3);
+  ctx.lineTo(cx - 1.5, ky + 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = rgba("#000000", 0.2);
+  ctx.fillRect(cx - 1.5, ky + 3, 3, 0.9);
+}
+
+/** Hall: proper columns with base, fluted shaft and capital at the edges and between windows. */
+function drawColumns(ctx: CanvasRenderingContext2D, x0: number, w: number, bodyTop: number, slabH: number, n: number, c: Colors): void {
+  const gap = w / n;
+  const top = bodyTop + 1;
+  const bottom = -slabH;
+  const xs = [x0 + 4];
+  for (let i = 1; i < n; i++) xs.push(x0 + gap * i);
+  xs.push(x0 + w - 4);
+  for (const x of xs) {
+    const g = ctx.createLinearGradient(x - 3, 0, x + 3, 0);
+    g.addColorStop(0, shade(c.trim, 0.35));
+    g.addColorStop(0.45, shade(c.trim, 0.55));
+    g.addColorStop(1, shade(c.trim, 0.05));
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 2.6, top + 3, 5.2, bottom - top - 5);
+    ctx.strokeStyle = rgba("#000000", 0.12);
+    ctx.lineWidth = 0.4;
+    for (const dx of [-1.2, 0, 1.2]) {
+      ctx.beginPath();
+      ctx.moveTo(x + dx, top + 4);
+      ctx.lineTo(x + dx, bottom - 3);
+      ctx.stroke();
+    }
+    ctx.fillStyle = shade(c.trim, 0.45);
+    ctx.fillRect(x - 3.8, top + 1, 7.6, 2.6); // capital
+    ctx.fillRect(x - 3.4, bottom - 2.4, 6.8, 2.4); // base
+    ctx.fillStyle = rgba("#000000", 0.18);
+    ctx.fillRect(x - 3.8, top + 3.4, 7.6, 0.7);
+  }
+}
+
+/** Facade details per room type: AC units, pipes, menu board, banners, vines, server racks. */
+function drawDecals(
+  ctx: CanvasRenderingContext2D,
+  type: RoomId,
+  x0: number,
+  w: number,
+  h: number,
+  bodyTop: number,
+  slabH: number,
+  n: number,
+  o: RoomDrawOptions,
+  c: Colors,
+): void {
+  const gap = w / n;
+  const between = (i: number) => x0 + gap * (i + 1);
+  const ac = (x: number, y: number) => {
+    ctx.fillStyle = "#e9edf2";
+    ctx.fillRect(x - 4, y, 8, 5.4);
+    ctx.fillStyle = rgba("#000000", 0.2);
+    ctx.fillRect(x - 4, y + 5.4, 8, 0.9);
+    ctx.strokeStyle = "#9aa4b2";
+    ctx.lineWidth = 0.35;
+    ctx.beginPath();
+    for (let k = 0; k < 4; k++) {
+      ctx.moveTo(x - 3.2, y + 1 + k * 1.1);
+      ctx.lineTo(x + 0.8, y + 1 + k * 1.1);
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x + 2.3, y + 2.7, 1.3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = rgba("#2a3a52", 0.5);
+    ctx.beginPath();
+    ctx.moveTo(x - 3, y + 6.3);
+    ctx.lineTo(x - 3, y + 9.4);
+    ctx.stroke();
+  };
+  const pipe = (x: number) => {
+    const g = ctx.createLinearGradient(x - 1.3, 0, x + 1.3, 0);
+    g.addColorStop(0, "#9aa4b2");
+    g.addColorStop(0.5, "#d6dce4");
+    g.addColorStop(1, "#7d8796");
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 1.2, bodyTop - 1, 2.4, -slabH - bodyTop + 1);
+    ctx.fillStyle = "#6b7482";
+    for (let y = bodyTop + 6; y < -slabH - 2; y += 11) ctx.fillRect(x - 1.8, y, 3.6, 1.2);
+  };
+  switch (type) {
+    case "dorm":
+      if (n > 1) ac(between(0), -31);
+      pipe(x0 + w - 3);
+      break;
+    case "itlab": {
+      if (n > 1) ac(between(n - 2), -31);
+      // cable bundle from the roof to the AC
+      ctx.strokeStyle = rgba("#1b2a3a", 0.55);
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(x0 + 3, bodyTop);
+      ctx.bezierCurveTo(x0 + 2, -30, x0 + 6, -20, x0 + 3, -slabH);
+      ctx.stroke();
+      break;
+    }
+    case "coworking":
+      if (n > 2) ac(between(1), -31);
+      pipe(x0 + 3);
+      break;
+    case "canteen": {
+      pipe(x0 + w - 3);
+      if (n > 1) {
+        const bx = between(0);
+        ctx.fillStyle = "#3b2a1e";
+        ctx.fillRect(bx - 4.5, -33, 9, 11);
+        ctx.fillStyle = "#24302a";
+        ctx.fillRect(bx - 3.6, -32.1, 7.2, 9.2);
+        ctx.strokeStyle = "#f4efe4";
+        ctx.lineWidth = 0.4;
+        ctx.beginPath();
+        for (let k = 0; k < 4; k++) {
+          ctx.moveTo(bx - 2.6, -30.2 + k * 2);
+          ctx.lineTo(bx + (k % 2 ? 1.2 : 2.4), -30.2 + k * 2);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case "library":
+    case "gym":
+      pipe(x0 + 3);
+      break;
+    case "faculty": {
+      const color = o.faculty ? FACULTIES[o.faculty].color : c.accent;
+      for (const bx of [x0 + 6, x0 + w - 6]) {
+        ctx.fillStyle = shade(color, -0.15);
+        ctx.beginPath();
+        ctx.moveTo(bx - 3.2, bodyTop + 1);
+        ctx.lineTo(bx + 3.2, bodyTop + 1);
+        ctx.lineTo(bx + 3.2, -slabH - 9);
+        ctx.lineTo(bx, -slabH - 6.5);
+        ctx.lineTo(bx - 3.2, -slabH - 9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = PALETTE.gold;
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+        if (o.faculty) {
+          ctx.fillStyle = PALETTE.white;
+          ctx.font = `700 5px "Rubik", system-ui, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(FACULTIES[o.faculty].emblem, bx, -28);
+        }
+      }
+      break;
+    }
+    case "garden": {
+      ctx.strokeStyle = "#3f8f5a";
+      ctx.lineWidth = 0.9;
+      for (const vx of [x0 + 2.5, x0 + w - 2.5]) {
+        ctx.beginPath();
+        ctx.moveTo(vx, -h + 1);
+        for (let y = -h + 4; y < -6; y += 6) ctx.quadraticCurveTo(vx + (y % 12 ? 2.4 : -2.4), y - 3, vx, y);
+        ctx.stroke();
+        ctx.fillStyle = "#5cb071";
+        for (let y = -h + 6; y < -8; y += 6) {
+          ctx.beginPath();
+          ctx.ellipse(vx + ((y / 6) % 2 ? 1.6 : -1.6), y, 1.6, 1, 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
 /**
  * Draw a room with its centre-bottom at the current origin (y grows downward, so the room
  * occupies y ∈ [-h, 0]).
@@ -368,13 +566,17 @@ export function drawRoom(ctx: CanvasRenderingContext2D, type: RoomId, w: number,
         ctx.fillRect(wx + 2 + k * (ww / 5), wy + wh - 9, ww / 5 - 1.5, 8);
       }
     } else if (type === "itlab") {
-      ctx.strokeStyle = "rgba(10,40,60,0.55)";
-      ctx.lineWidth = 1.2;
-      for (let k = 0; k < 3; k++) {
-        const len = ((o.seed + i * 3 + k * 5 + Math.floor(o.t * 2)) % 4) * 3 + 5;
+      // server racks behind the glass (their LEDs glow from the emissive layer)
+      for (const rx of [wx + ww * 0.18, wx + ww * 0.58]) {
+        ctx.fillStyle = "rgba(8,22,36,0.82)";
+        ctx.fillRect(rx, wy + ww * 0.42, ww * 0.26, wh - ww * 0.42);
+        ctx.strokeStyle = "rgba(60,110,140,0.6)";
+        ctx.lineWidth = 0.4;
         ctx.beginPath();
-        ctx.moveTo(wx + 4, wy + ww / 2 + 3 + k * 5);
-        ctx.lineTo(wx + 4 + len, wy + ww / 2 + 3 + k * 5);
+        for (let ry = wy + ww * 0.5; ry < wy + wh - 1; ry += 2.6) {
+          ctx.moveTo(rx + 0.6, ry);
+          ctx.lineTo(rx + ww * 0.26 - 0.6, ry);
+        }
         ctx.stroke();
       }
     } else if (type === "dorm") {
@@ -407,14 +609,18 @@ export function drawRoom(ctx: CanvasRenderingContext2D, type: RoomId, w: number,
     ctx.arc(cx, wy + ww / 2, ww / 2, Math.PI, 0);
     ctx.lineTo(wx + ww, wy + wh);
     ctx.stroke();
+    if (type !== "foundation") drawSurround(ctx, cx, wx, wy, ww, wh, c);
     ctx.fillStyle = shade(c.trim, 0.05);
     ctx.fillRect(wx - 2, wy + wh, ww + 4, 3);
-    if (type === "hall" && i < n - 1) {
-      // pilasters between windows
-      ctx.fillStyle = shade(c.body, -0.08);
-      ctx.fillRect(cx + gap / 2 - 3, bodyTop + 2, 6, -slabH - bodyTop - 2);
-    }
+    // sill brackets and the soft shadow the sill casts
+    ctx.fillStyle = rgba("#000000", 0.16);
+    ctx.fillRect(wx - 1.5, wy + wh + 3, ww + 3, 1.6);
+    ctx.fillStyle = shade(c.trim, -0.12);
+    ctx.fillRect(wx + 1, wy + wh + 3, 2, 1.8);
+    ctx.fillRect(wx + ww - 3, wy + wh + 3, 2, 1.8);
   }
+  if (type === "hall") drawColumns(ctx, x0, w, bodyTop, slabH, n, c);
+  drawDecals(ctx, type, x0, w, h, bodyTop, slabH, n, o, c);
 
   // Foundation door and steps
   if (type === "foundation") {

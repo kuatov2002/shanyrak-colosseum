@@ -16,7 +16,7 @@ import {
   TilingSprite,
   UPDATE_PRIORITY,
 } from "pixi.js";
-import { DropShadowFilter, GlowFilter, ZoomBlurFilter } from "pixi-filters";
+import { AdvancedBloomFilter, DropShadowFilter, GlowFilter, ZoomBlurFilter } from "pixi-filters";
 import { BALANCE } from "../config/balance";
 import { CROWN_DURATION } from "../gameplay/round";
 import type { Tower } from "../gameplay/tower";
@@ -151,6 +151,9 @@ export class PixiRenderer {
   private lamps: { lamp: Sprite; glow: Sprite }[] = [];
   private flags: { cloth: TilingSprite; pole: Sprite }[] = [];
   private figures: Figure[] = [];
+  /** Emissive sources only (window cores, neon, LEDs, lanterns); bloom applies to this layer alone. */
+  private readonly emissive = new Container();
+  private readonly bloom = new AdvancedBloomFilter({ threshold: 0.12, bloomScale: 1.15, brightness: 0, blur: 5, quality: 5 });
   private readonly people = new Container();
   private readonly crowdBack = new Container();
   private readonly crowdFront = new Container();
@@ -338,7 +341,9 @@ export class PixiRenderer {
     this.grade = createWarmGrade();
     this.world.filters = [this.grade.filter];
     this.particles = new Particles(b.particles());
-    this.world.addChild(this.groundWorld, this.aura, this.towerLayer, this.fog, this.movingLayer, this.crownLayer, this.particles.worldNormal, this.particles.worldAdd, this.floatLayer);
+    this.bloom.resolution = 0.5;
+    this.emissive.filters = [this.bloom];
+    this.world.addChild(this.groundWorld, this.aura, this.towerLayer, this.fog, this.movingLayer, this.emissive, this.crownLayer, this.particles.worldNormal, this.particles.worldAdd, this.floatLayer);
     this.screenFx.addChild(this.crane, this.particles.screen, this.particles.screenAdd);
 
     this.vignette = new Sprite(b.vignette());
@@ -750,8 +755,8 @@ export class PixiRenderer {
     this.drawCrane(v, ox, oy);
 
     // Overlays
-    const nightVignette = v.event?.id === "session" || th.stars > 0.7 ? 0.45 : 0.15;
-    this.vignette.alpha = nightVignette;
+    // A light vignette (0.06 by day, 0.10 at night) — framing, not a dark tunnel.
+    this.vignette.alpha = 0.06 + 0.04 * Math.min(1, th.stars + (v.event?.id === "session" ? 0.5 : 0));
     this.danger.visible = v.danger && !this.opts.menu;
     if (this.danger.visible) this.danger.alpha = 0.5 + 0.3 * Math.sin(this.time * 7);
     this.flashSprite.alpha = this.opts.reducedMotion ? 0 : v.flash * 0.22;
@@ -894,13 +899,17 @@ export class PixiRenderer {
         bv = new BlockView(this.bank, b.type, b.w, look, b.id);
         this.blocks.set(b.id, bv);
         this.towerLayer.addChild(bv);
+        this.emissive.addChild(bv.glow);
       }
       const by = b.floor * H;
       bv.visible = !(by > viewTop || by + H < viewBottom);
+      bv.glow.visible = bv.visible && night > 0.04;
+      bv.contact.visible = b.floor > 0;
       if (!bv.visible) continue;
       bv.position.set(v.tower.visualX(b), -by);
       bv.mood = v.event?.id === "session" && b.id % 2 === 1 ? "sleep" : "idle";
       bv.sync(this.time, b.type === "foundation" ? night * 0.7 : night, b.shown, b.crack, b.tilt, b.squash);
+      this.followGlow(bv);
     }
     for (const [id, bv] of this.blocks) {
       if (!seen.has(id)) {
@@ -920,6 +929,16 @@ export class PixiRenderer {
     }
   }
 
+  /** The emissive twin of a room follows its position, tilt and squash. */
+  private followGlow(bv: BlockView): void {
+    const g = bv.glow;
+    if (g.parent !== this.emissive) this.emissive.addChild(g);
+    g.position.copyFrom(bv.position);
+    g.rotation = bv.rotation;
+    g.scale.copyFrom(bv.scale);
+    g.alpha = bv.alpha;
+  }
+
   private syncMoving(v: WorldView, night: number, look: BlockLook): void {
     const mk = (type: RoomId, w: number) => new BlockView(this.bank, type, w, look, 1);
     // Hanging room on the crane
@@ -934,7 +953,12 @@ export class PixiRenderer {
       hv.visible = true;
       hv.position.set(v.crane.x, -(v.tower.topY + BALANCE.world.hangAbove));
       hv.sync(this.time, night * 0.6, 0, 0, v.crane.tilt, 0);
-    } else if (this.hangingView) this.hangingView.view.visible = false;
+      this.followGlow(hv);
+      hv.glow.visible = night > 0.04;
+    } else if (this.hangingView) {
+      this.hangingView.view.visible = false;
+      this.hangingView.view.glow.visible = false;
+    }
     // Falling room
     if (v.falling) {
       const f = v.falling;
@@ -948,7 +972,12 @@ export class PixiRenderer {
       fv.visible = true;
       fv.position.set(f.x, -f.y);
       fv.sync(this.time, night * 0.6, 0, 0, f.rot, 0);
-    } else if (this.fallingView) this.fallingView.view.visible = false;
+      this.followGlow(fv);
+      fv.glow.visible = night > 0.04;
+    } else if (this.fallingView) {
+      this.fallingView.view.visible = false;
+      this.fallingView.view.glow.visible = false;
+    }
     // Debris
     const alive = new Set(v.debris);
     for (const d of v.debris) {

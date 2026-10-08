@@ -2,8 +2,11 @@
 // per-room extras). Lives in world units, origin at the room's centre-bottom (Pixi y down).
 // Students sit in the windows as rigged busts (render/characters.ts): they breathe, blink, wave now
 // and then, sip tea in the chaikhana, doze off on session night and cheer at a perfect landing.
+// Light: each window spills a warm gradient onto the facade below and flickers on its own; the
+// emissive sources (window cores, neon, LEDs, lanterns) live in `glow`, which the renderer keeps in
+// a separate layer with bloom so only they bloom. A soft contact shadow falls on the room below.
 
-import { Container, Sprite } from "pixi.js";
+import { Container, Sprite, type DestroyOptions, type TilingSprite } from "pixi.js";
 import { Bust, specFor } from "./characters";
 import type { RoomId } from "../meta/rooms";
 import type { FacultyId } from "../social/faculties";
@@ -21,6 +24,8 @@ export interface BlockLook {
 interface WindowView {
   rect: WindowRect;
   light: Sprite;
+  spill: Sprite;
+  core: Sprite;
   phase: number;
   nightOnly: boolean;
   students: Bust[];
@@ -36,6 +41,12 @@ export class BlockView extends Container {
   /** Layer between the base and the windows (wall ornament, interior glow). */
   readonly wall = new Container();
   readonly windowRects: WindowRect[];
+  /** Emissive sources; not a child — the renderer puts it in the bloom layer and syncs its transform. */
+  readonly glow = new Container();
+  /** Shadow cast onto the room below (shown for rooms standing on another). */
+  readonly contact: Sprite;
+  /** Wall ornament decal, aligned to one world grid across floors. */
+  ornament: TilingSprite | null = null;
   private shownStudents = 0;
   private lastT = -1;
   private cheerT = 0;
@@ -57,6 +68,11 @@ export class BlockView extends Container {
     this.base.anchor.set(art.ax, art.ay);
     this.base.scale.x = w / (Math.round(w / 4) * 4);
     this.addChild(this.base);
+    this.contact = new Sprite(bank.contactShadow());
+    this.contact.anchor.set(0.5, 0);
+    this.contact.width = w + 6;
+    this.contact.height = 11;
+    this.contact.visible = false;
     const lights = new Container();
     const people = new Container();
     const cyan = type === "itlab";
@@ -68,6 +84,18 @@ export class BlockView extends Container {
       light.position.set(rect.x, rect.y);
       light.blendMode = "add";
       light.tint = cyan ? 0x7cefff : 0xffc46b;
+      const spill = new Sprite(bank.spill());
+      spill.anchor.set(0.5, 0);
+      spill.position.set(rect.cx, rect.y + rect.h + 3);
+      spill.width = rect.w * 1.35;
+      spill.height = 12;
+      spill.blendMode = "add";
+      spill.tint = cyan ? 0x7cefff : 0xffb35a;
+      const core = new Sprite(wl.tex);
+      core.anchor.set(wl.ax, wl.ay);
+      core.position.set(rect.x, rect.y);
+      core.tint = light.tint;
+      this.glow.addChild(core);
       const students: Bust[] = [];
       const fit = Math.min(0.84, (rect.h * 0.52) / 14.1, rect.w / 24);
       for (let s = 0; s < 2; s++) {
@@ -79,24 +107,24 @@ export class BlockView extends Container {
         people.addChild(bust);
         students.push(bust);
       }
-      lights.addChild(light);
+      lights.addChild(spill, light);
       const rnd = Math.sin(seed * 12.9898 + rect.i * 78.233) * 43758.5453;
       const frac = rnd - Math.floor(rnd);
-      this.windows.push({ rect, light, phase: frac * Math.PI * 2, nightOnly: frac < 0.18, students });
+      this.windows.push({ rect, light, spill, core, phase: frac * Math.PI * 2, nightOnly: frac < 0.18, students });
     }
-    this.addChild(this.wall, lights, people, this.extras);
+    this.addChild(this.contact, this.wall, lights, people, this.extras);
     decorateRoom(this, bank, type);
+  }
+
+  /** Everyone in this room cheers for a moment (perfect landing, the crown). */
+  cheer(seconds = 1.6): void {
+    this.cheerT = Math.max(this.cheerT, seconds);
   }
 
   /**
    * @param night 0..1 how dark it is (window light strength)
    * @param shown students to display (animated count)
    */
-  /** Everyone in this room cheers for a moment (perfect landing, the crown). */
-  cheer(seconds = 1.6): void {
-    this.cheerT = Math.max(this.cheerT, seconds);
-  }
-
   sync(t: number, night: number, shown: number, crack: number, tilt: number, squash: number): void {
     const dt = this.lastT < 0 ? 0 : Math.min(0.1, Math.max(0, t - this.lastT));
     this.lastT = t;
@@ -106,6 +134,13 @@ export class BlockView extends Container {
       const flicker = 0.9 + 0.1 * Math.sin(t * 2.3 + wv.phase) + (Math.sin(t * 13 + wv.phase * 3) > 0.985 ? -0.25 : 0);
       const on = wv.nightOnly ? Math.max(0, night - 0.35) / 0.65 : 1;
       wv.light.alpha = (0.18 + 0.82 * night) * flicker * on;
+      // each window has its own flicker; its spill and bloom core follow it
+      wv.spill.alpha = wv.light.alpha * (0.22 + 0.5 * night);
+      wv.core.alpha = wv.light.alpha * night * 0.9;
+    }
+    if (this.ornament) {
+      const tw = this.ornament.texture.width;
+      this.ornament.tilePosition.x = -((((this.x + this.ornament.x) % tw) + tw) % tw);
     }
     // Students fade in window by window
     const target = Math.floor(shown);
@@ -149,5 +184,10 @@ export class BlockView extends Container {
       this.scale.set(1 + sq, 1 - sq);
     } else if (this.scale.x !== 1) this.scale.set(1, 1);
     for (const fn of this.tickers) fn(t, night);
+  }
+
+  override destroy(options?: DestroyOptions): void {
+    this.glow.destroy({ children: true });
+    super.destroy(options);
   }
 }

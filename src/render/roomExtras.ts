@@ -124,6 +124,39 @@ const lantern = () =>
     ctx.fillRect(2, 14, 6, 1.6);
   });
 
+/** Blade sign of the chaikhana: dark board + neon lettering (the lettering is emissive). */
+const signBoard = () =>
+  baked("signBoard", 12, 34, (ctx) => {
+    ctx.fillStyle = "#3a2618";
+    ctx.fillRect(5.2, 0, 1.6, 4);
+    ctx.fillStyle = "#24161c";
+    ctx.beginPath();
+    ctx.moveTo(1, 4);
+    ctx.lineTo(11, 4);
+    ctx.lineTo(11, 31);
+    ctx.quadraticCurveTo(6, 34, 1, 31);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#f2b84b";
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  });
+
+const signNeon = () =>
+  baked("signNeon", 12, 34, (ctx) => {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '700 5.2px "Rubik", system-ui, sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    "ЧАЙ".split("").forEach((ch, i) => ctx.fillText(ch, 6, 10 + i * 6.4));
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(3, 29);
+    ctx.quadraticCurveTo(6, 30.5, 9, 29);
+    ctx.stroke();
+  });
+
 const pole = () =>
   baked("pole", 3, 34, (ctx) => {
     ctx.fillStyle = "#d9d4c8";
@@ -133,6 +166,14 @@ const pole = () =>
     ctx.arc(1.5, 1.5, 1.5, 0, Math.PI * 2);
     ctx.fill();
   });
+
+/** An additive copy of an emissive source for the bloom layer. */
+function emit(bv: BlockView, bank: TextureBank, tint: number, size: number, x: number, y: number): Sprite {
+  const s = glow(bank, tint, size);
+  s.position.set(x, y);
+  bv.glow.addChild(s);
+  return s;
+}
 
 function glow(bank: TextureBank, tint: number, size: number): Sprite {
   const s = new Sprite(bank.softDot());
@@ -152,12 +193,14 @@ export function decorateRoom(bv: BlockView, bank: TextureBank, type: RoomId): vo
   const extras = bv.extras;
   const seed = bv.seed;
 
-  // Faint ornament overlay on the walls (all solid rooms)
+  // Ornament decal on the walls: one grid and scale for every room, low alpha (0.15), aligned to
+  // world x by BlockView so the pattern lines up from floor to floor.
   if (type !== "garden" && type !== "foundation") {
     const orn = new TilingSprite({ texture: bank.wallOrnament(bv.look.ornament), width: w - 10, height: BLOCK_H * 0.5 });
     orn.position.set(x0 + 5, -BLOCK_H * 0.78);
-    orn.alpha = 0.09;
+    orn.alpha = 0.15;
     bv.wall.addChild(orn);
+    bv.ornament = orn;
   }
 
   switch (type) {
@@ -180,10 +223,29 @@ export function decorateRoom(bv: BlockView, bank: TextureBank, type: RoomId): vo
       lamp.position.set(x0 + 10, roofY + 14);
       const g = glow(bank, 0xff9a3c, 34);
       g.position.set(x0 + 10, roofY + 24);
-      extras.addChild(g, lamp);
+      const lampCore = emit(bv, bank, 0xffb35a, 12, x0 + 10, roofY + 23);
+      // blade sign on the right edge, neon lettering at night
+      const board = new Sprite(signBoard());
+      board.anchor.set(0, 0);
+      board.position.set(x0 + w - 1, roofY + 11);
+      const neon = new Sprite(signNeon());
+      neon.anchor.set(0, 0);
+      neon.position.set(x0 + w - 1, roofY + 11);
+      neon.tint = 0xff7ac0;
+      const neonBloom = new Sprite(signNeon());
+      neonBloom.anchor.set(0, 0);
+      neonBloom.position.set(x0 + w - 1, roofY + 11);
+      neonBloom.tint = 0xff7ac0;
+      bv.glow.addChild(neonBloom);
+      extras.addChild(g, lamp, board, neon);
       bv.tickers.push((t, night) => {
         lamp.rotation = Math.sin(t * 1.6 + seed) * 0.12;
-        g.alpha = (0.35 + 0.65 * night) * (0.85 + 0.15 * Math.sin(t * 11 + seed));
+        const flick = 0.85 + 0.15 * Math.sin(t * 11 + seed);
+        g.alpha = (0.35 + 0.65 * night) * flick;
+        lampCore.alpha = night * flick;
+        const buzz = Math.sin(t * 37 + seed) > 0.97 ? 0.4 : 1;
+        neon.alpha = 0.35 + 0.65 * night * buzz;
+        neonBloom.alpha = night * buzz;
       });
       break;
     }
@@ -199,12 +261,22 @@ export function decorateRoom(bv: BlockView, bank: TextureBank, type: RoomId): vo
         leds.push(led);
         extras.addChild(led);
       }
+      // LEDs of the racks behind the glass (emissive)
+      for (const win of bv.windowRects) {
+        for (const rx of [win.x + win.w * 0.31, win.x + win.w * 0.71]) {
+          for (let k = 0; k < 3; k++) {
+            const led = emit(bv, bank, k % 2 ? 0x45e0ff : 0x8ef0a5, 2.6, rx, win.y + win.w * 0.55 + k * 2.6);
+            leds.push(led);
+            extras.addChild(Object.assign(glow(bank, led.tint as number, 2.2), { x: rx, y: win.y + win.w * 0.55 + k * 2.6 }));
+          }
+        }
+      }
       const halo = glow(bank, 0x45e0ff, w * 0.9);
       halo.height = BLOCK_H * 0.9;
       halo.position.set(0, -BLOCK_H * 0.45);
       bv.wall.addChild(halo);
       bv.tickers.push((t, night) => {
-        leds.forEach((l, i) => (l.alpha = Math.sin(t * (5 + i) + i * 2 + seed) > 0.2 ? 1 : 0.15));
+        leds.forEach((l, i) => (l.alpha = (Math.sin(t * (5 + (i % 7)) + i * 2 + seed) > 0.2 ? 1 : 0.15) * (l.parent === bv.glow ? 0.4 + 0.6 * night : 1)));
         halo.alpha = 0.08 + 0.18 * night;
       });
       break;
@@ -272,6 +344,7 @@ export function decorateRoom(bv: BlockView, bank: TextureBank, type: RoomId): vo
         b.position.set(x0 + 6 + k * (w - 12), -BLOCK_H * 0.82 + 10 * 4 * k * (1 - k));
         bulbs.push(b);
         extras.addChild(b);
+        bulbs.push(emit(bv, bank, b.tint as number, 4, b.x, b.y));
       }
       bv.tickers.push((t) => bulbs.forEach((b, i) => (b.alpha = Math.sin(t * 4 + i * 1.3) > -0.3 ? 1 : 0.25)));
       break;
@@ -281,6 +354,7 @@ export function decorateRoom(bv: BlockView, bank: TextureBank, type: RoomId): vo
       lamps[0].position.set(-31, -BLOCK_H * 0.47);
       lamps[1].position.set(31, -BLOCK_H * 0.47);
       extras.addChild(...lamps);
+      lamps.push(emit(bv, bank, 0xffc46b, 10, -31, -BLOCK_H * 0.47), emit(bv, bank, 0xffc46b, 10, 31, -BLOCK_H * 0.47));
       bv.tickers.push((t, night) => lamps.forEach((l, i) => (l.alpha = (0.25 + 0.75 * night) * (0.9 + 0.1 * Math.sin(t * 9 + i)))));
       break;
     }

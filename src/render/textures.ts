@@ -190,6 +190,48 @@ export class TextureBank {
   }
 
   /** Soft radial dot (white), used for glows, halos and lights. */
+  /** Warm light spilling from a window down onto the facade (white, tinted at runtime). */
+  spill(): Texture {
+    return this.memo("spill", () => {
+      const [c, ctx] = makeCanvas(32, 48);
+      const g = ctx.createLinearGradient(0, 0, 0, 48);
+      g.addColorStop(0, "rgba(255,255,255,0.75)");
+      g.addColorStop(0.35, "rgba(255,255,255,0.3)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(6, 0);
+      ctx.lineTo(26, 0);
+      ctx.lineTo(32, 48);
+      ctx.lineTo(0, 48);
+      ctx.closePath();
+      ctx.fill();
+      return canvasTexture(c, 1);
+    });
+  }
+
+  /** Soft contact shadow a room casts on the one below (black, fades downward). */
+  contactShadow(): Texture {
+    return this.memo("contact", () => {
+      const [c, ctx] = makeCanvas(64, 32);
+      const g = ctx.createLinearGradient(0, 0, 0, 32);
+      g.addColorStop(0, "rgba(0,0,0,0.5)");
+      g.addColorStop(0.4, "rgba(0,0,0,0.18)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 64, 32);
+      const fade = ctx.createLinearGradient(0, 0, 64, 0);
+      ctx.globalCompositeOperation = "destination-in";
+      fade.addColorStop(0, "rgba(0,0,0,0)");
+      fade.addColorStop(0.08, "rgba(0,0,0,1)");
+      fade.addColorStop(0.92, "rgba(0,0,0,1)");
+      fade.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = fade;
+      ctx.fillRect(0, 0, 64, 32);
+      return canvasTexture(c, 1);
+    });
+  }
+
   softDot(): Texture {
     return this.memo("softdot", () => {
       const size = 128;
