@@ -25,9 +25,9 @@ function rewardText(r: QuestReward): string {
   return p.join(" ");
 }
 
-export function questsScreen(app: App): Screen {
+export function questsScreen(app: App, params: Record<string, unknown> = {}): Screen {
   const shell = hub(app, "quests", "quests");
-  let tab: Tab = "daily";
+  let tab: Tab = params.tab === "weekly" || params.tab === "achievements" ? params.tab : "daily";
   const build = () => {
     const d = app.store.data;
     shell.body.innerHTML = "";

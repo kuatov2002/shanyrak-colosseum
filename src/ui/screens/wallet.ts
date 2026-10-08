@@ -8,7 +8,7 @@ import { badgeDataUrl, badgeInfo } from "../../solana/nftArt";
 import { fetchShaiBalance, fetchSolBalance, SHAI_TOKEN } from "../../solana/token";
 import { shortAddress } from "../../social/leaderboards";
 import type { App, Screen } from "../app";
-import { button, screenIntro, toast } from "../components/common";
+import { button, emptyState, screenIntro, toast } from "../components/common";
 import { mintAvailability, openMintDialog } from "../components/mint";
 import { hub } from "../components/shell";
 import { fmt, h } from "../dom";
@@ -225,7 +225,11 @@ export function walletScreen(app: App): Screen {
                 ),
               ),
             )
-          : h("p.muted", null, "Пока пусто — здесь появятся выпущенные значки и привязка профиля."),
+          : emptyState("medal", "История пуста", "Здесь появятся выпущенные значки-NFT и привязка профиля. Значки открываются за достижения.", {
+              label: "🏅 К достижениям",
+              onClick: () => app.router.go("quests", { tab: "achievements" }),
+              kind: "soft",
+            }),
       ),
     );
   };

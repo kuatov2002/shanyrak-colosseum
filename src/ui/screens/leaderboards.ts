@@ -4,7 +4,7 @@ import { formatCountdown, weekProgress } from "../../core/time";
 import { FACULTIES } from "../../social/faculties";
 import { BOARD_INFO, type BoardId, type BoardView } from "../../social/leaderboards";
 import type { App, Screen } from "../app";
-import { button, screenIntro } from "../components/common";
+import { button, emptyState, screenIntro } from "../components/common";
 import { hub } from "../components/shell";
 import { fmt, h } from "../dom";
 
@@ -72,10 +72,21 @@ export function leaderboardsScreen(app: App, params: Record<string, unknown>): S
       return;
     }
 
+    const playMode = tab === "daily_tower" ? "daily" : "quick";
     void app.leaderboards.board(tab).then((view: BoardView) => {
       if (!alive) return;
       body.innerHTML = "";
       const info = BOARD_INFO[tab as BoardId];
+      if (!view.rows.length) {
+        body.append(
+          h("p.muted", null, info.desc),
+          emptyState("trophy", "Пока здесь никого", "Сыграйте раунд — ваш результат появится в таблице первым.", {
+            label: "▶ Сыграть",
+            onClick: () => app.startRound(playMode),
+          }),
+        );
+        return;
+      }
       body.append(
         h("p.muted", null, info.desc),
         h(`p.note${view.source === "online" ? ".online" : ""}`, null, view.source === "online" ? "🟢 " : "⚪ ", view.note),
@@ -94,6 +105,10 @@ export function leaderboardsScreen(app: App, params: Record<string, unknown>): S
         ),
         tab === "daily_tower" ? button("📅 Сыграть ежедневную башню", () => app.startRound("daily"), { kind: "gold" }) : "",
       );
+    }).catch(() => {
+      if (!alive) return;
+      body.innerHTML = "";
+      body.append(emptyState("cloud", "Таблица не загрузилась", "Похоже, нет связи. Результаты сохраняются на устройстве и попадут сюда позже.", { label: "↻ Повторить", onClick: build, kind: "soft" }));
     });
   };
   build();

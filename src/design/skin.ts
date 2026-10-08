@@ -18,6 +18,7 @@ export interface Tokens {
   night: string;
   green: string;
   font: string;
+  fontDisplay: string;
 }
 
 const FALLBACK: Tokens = {
@@ -34,6 +35,7 @@ const FALLBACK: Tokens = {
   night: "#141833",
   green: "#4fd08a",
   font: "Rubik, system-ui, sans-serif",
+  fontDisplay: "\"Montserrat Alternates\", Rubik, system-ui, sans-serif",
 };
 
 /** Read the palette from CSS custom properties (single source of truth for DOM and textures). */
@@ -55,6 +57,7 @@ export function readTokens(): Tokens {
     night: v("--bg", FALLBACK.night),
     green: v("--green", FALLBACK.green),
     font: v("--font", FALLBACK.font),
+    fontDisplay: v("--font-display", FALLBACK.fontDisplay),
   };
 }
 

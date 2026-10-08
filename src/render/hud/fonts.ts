@@ -15,16 +15,25 @@ export const FONT_CHARS = [
 
 export const HUD_BOLD = "ShHudBold";
 export const HUD_TEXT = "ShHudText";
+/** Display face (Montserrat Alternates) for the big numbers and titles. */
+export const HUD_DISPLAY = "ShHudDisplay";
 
 let installed = false;
 
 export function installHudFonts(): void {
   if (installed) return;
   installed = true;
-  const family = readTokens().font;
+  const tokens = readTokens();
+  const family = tokens.font;
   BitmapFont.install({
     name: HUD_BOLD,
     style: { fontFamily: family, fontSize: 56, fontWeight: "800", fill: "#ffffff", stroke: { color: "#140f2e", width: 7, join: "round" } },
+    chars: FONT_CHARS,
+    resolution: 2,
+  });
+  BitmapFont.install({
+    name: HUD_DISPLAY,
+    style: { fontFamily: tokens.fontDisplay, fontSize: 56, fontWeight: "800", fill: "#ffffff", stroke: { color: "#140f2e", width: 7, join: "round" } },
     chars: FONT_CHARS,
     resolution: 2,
   });

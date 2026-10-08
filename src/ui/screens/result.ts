@@ -7,7 +7,7 @@ import { applyMetrics, WEEKLY_QUESTS } from "../../retention/quests";
 import { FACULTIES } from "../../social/faculties";
 import { MINTABLE_IDS } from "../../solana/nft";
 import type { App, Screen } from "../app";
-import { button, ornamentDivider, rarityBadge, toast } from "../components/common";
+import { button, emptyState, ornamentDivider, rarityBadge, toast } from "../components/common";
 import { fmt, h } from "../dom";
 import { reducedMotion, tweenNumber } from "../motion";
 
@@ -23,7 +23,7 @@ export function resultScreen(app: App): Screen {
   const sum = app.lastSummary;
   const el = h("div.result-screen.scroll");
   if (!sum) {
-    el.append(h("p", null, "Нет результата"), button("В кампус", () => app.router.go("home"), { kind: "gold" }));
+    el.append(emptyState("dome", "Раунд ещё не сыгран", "Постройте башню — здесь появятся этажи, очки и награды.", { label: "В кампус", onClick: () => app.router.go("home") }));
     return { el, backdrop: "tower" };
   }
   const r = sum.result;

@@ -24,7 +24,7 @@ import { CHIP, PANEL, type Skin } from "../../design/skin";
 import { hexToRgb } from "../color";
 import type { TextureBank } from "../textures";
 import { PixiButton } from "./button";
-import { HUD_BOLD, HUD_TEXT, installHudFonts } from "./fonts";
+import { HUD_BOLD, HUD_DISPLAY, HUD_TEXT, installHudFonts } from "./fonts";
 
 export interface HudCallbacks {
   onPause(): void;
@@ -202,7 +202,7 @@ export class Hud extends Container {
   ) {
     super();
     installHudFonts();
-    this.heightText = text(HUD_BOLD, 46, "0");
+    this.heightText = text(HUD_DISPLAY, 44, "0");
     this.floorLabel = text(HUD_TEXT, 12, "ЭТАЖ", 0xefe3c8);
     this.scoreText = text(HUD_BOLD, 16, "0 очков", 0xffd75e);
     this.modeLabel = text(HUD_TEXT, 12, "", 0xb9b0cf);
@@ -211,12 +211,12 @@ export class Hud extends Container {
     this.shieldText = text(HUD_BOLD, 14, "", 0x9fd8ff);
     this.nextTitle = text(HUD_TEXT, 11, "Далее", 0xb9b0cf);
     this.nextName = text(HUD_TEXT, 12, "");
-    this.comboText = text(HUD_BOLD, 56, "");
+    this.comboText = text(HUD_DISPLAY, 52, "");
     this.comboLabel = text(HUD_TEXT, 13, "КОМБО", 0xefe3c8);
     this.hintText = text(HUD_TEXT, 15, "", 0x2a1a05);
-    this.bannerTitle = text(HUD_BOLD, 24, "");
+    this.bannerTitle = text(HUD_DISPLAY, 22, "");
     this.bannerSub = text(HUD_TEXT, 13, "", 0xefe3c8);
-    this.offerTitle = text(HUD_BOLD, 24, "Выберите бонус", 0xffd75e);
+    this.offerTitle = text(HUD_DISPLAY, 22, "Выберите бонус", 0xffd75e);
     this.offerSub = text(HUD_TEXT, 13, "Один бонус — до конца раунда или на несколько этажей", 0xefe3c8);
 
     this.eventChip = new Chip(skin, "wind", 13);

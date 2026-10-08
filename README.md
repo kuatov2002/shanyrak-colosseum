@@ -150,6 +150,7 @@ Badge minting needs the published build: metadata lives at the versioned iDos CD
 - **Live game:** https://je8w0z54.idos.games/ · **Platform page:** https://idosgames.com/app/JE8W0Z54/
 - **Trailer:** [docs/media/trailer.mp4](docs/media/trailer.mp4)
 - **Docs (RU):** [Об игре](docs/GAME.md) · [Питч](docs/PITCH.md) · [Известные ограничения](docs/KNOWN_ISSUES.md)
+- **Fonts:** [Rubik](https://github.com/googlefonts/rubik) and [Montserrat Alternates](https://github.com/JulietaUla/Montserrat), self-hosted under the SIL Open Font License 1.1 ([licences](src/assets/fonts/)). All art, icons and sound are drawn or synthesised in code.
 
 ---
 

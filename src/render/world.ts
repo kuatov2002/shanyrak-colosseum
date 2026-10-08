@@ -81,11 +81,20 @@ function nextFrame(): Promise<void> {
   return new Promise((r) => (typeof requestAnimationFrame === "function" && !document.hidden ? requestAnimationFrame(() => r()) : setTimeout(r, 0)));
 }
 
-/** Wait (bounded) for the brand font so baked BitmapFonts use it. */
+/**
+ * Wait (bounded) for the self-hosted fonts so baked BitmapFonts and canvas labels use them. The
+ * faces are split by unicode-range, so the sample text pulls in the Latin, Cyrillic and Kazakh
+ * (Cyrillic-ext) files, not just Latin.
+ */
 async function loadFonts(): Promise<void> {
+  const sample = "Aa0 Шш ӘҒҚҢӨҰҮҺІ";
   try {
     await Promise.race([
-      Promise.all([document.fonts.load("800 48px Rubik"), document.fonts.load("700 24px Rubik"), document.fonts.load("500 16px Rubik")]),
+      Promise.all([
+        document.fonts.load("800 48px Rubik", sample),
+        document.fonts.load("600 24px Rubik", sample),
+        document.fonts.load(`800 48px "Montserrat Alternates"`, sample),
+      ]),
       new Promise((r) => setTimeout(r, 1500)),
     ]);
   } catch {

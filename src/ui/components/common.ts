@@ -1,6 +1,7 @@
 // Shared UI pieces: buttons, progress bars, toasts, modals, rarity badges, reward chips.
 
 import { RARITY_COLOR, RARITY_LABEL, type Rarity } from "../../meta/rooms";
+import { emptyArt, type IconName } from "../../design/glyphs";
 import { clear, h } from "../dom";
 import { stagger } from "../motion";
 
@@ -142,6 +143,23 @@ export function modal(
   // Content may focus its primary action itself (pause does); otherwise focus the dialog.
   if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
   return { close, body };
+}
+
+/** Empty state: an illustration from the icon set, what will appear here, and one way forward. */
+export function emptyState(
+  iconName: IconName,
+  title: string,
+  text: string,
+  action?: { label: string; onClick: () => void; kind?: "primary" | "gold" | "soft" },
+): HTMLElement {
+  return h(
+    "div.empty-state",
+    { role: "status" },
+    h("div.empty-art", { html: emptyArt(iconName) }),
+    h("b.empty-title", null, title),
+    h("p.empty-text", null, text),
+    action ? button(action.label, action.onClick, { kind: action.kind ?? "gold" }) : null,
+  );
 }
 
 export function refreshInto(el: HTMLElement, build: () => Node): void {
