@@ -1,0 +1,11 @@
+Copyright (c) 2026 kuatov2002. All rights reserved.
+
+The source code in this repository is published for review only (in particular, for evaluation by
+hackathon judges). No licence is granted to use, copy, modify, merge, publish, distribute,
+sublicense or sell any part of it, or to create derivative works from it, without the prior
+written permission of the copyright holder.
+
+Third-party components keep their own licences:
+- Fonts in src/assets/fonts (Rubik, Montserrat Alternates): SIL Open Font License 1.1, see the
+  licence files next to them.
+- npm dependencies: the licences declared in their packages.

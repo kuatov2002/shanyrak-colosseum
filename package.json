@@ -1,6 +1,7 @@
 {
   "name": "shanyrak-campus-tower",
   "private": true,
+  "license": "UNLICENSED",
   "version": "0.1.0",
   "type": "module",
   "description": "Шанырак: Кампус-Башня — физико-аркадная строительная игра (iDos Games × Solana Superteam Kazakhstan)",
