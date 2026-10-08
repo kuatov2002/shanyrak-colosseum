@@ -9,6 +9,7 @@ import { MINTABLE_IDS } from "../../solana/nft";
 import type { App, Screen } from "../app";
 import { button, ornamentDivider, rarityBadge, toast } from "../components/common";
 import { fmt, h } from "../dom";
+import { reducedMotion, tweenNumber } from "../motion";
 
 const REASON_TEXT: Record<string, string> = {
   crown: "Вы сами увенчали кампус шаныраком — бонус +25% $SHAI!",
@@ -43,10 +44,10 @@ export function resultScreen(app: App): Screen {
   const stats = h(
     "div.result-stats",
     null,
-    stat("🏛️", `${r.height}`, "этажей"),
-    stat("✨", fmt(r.score), "очков"),
-    stat("🎓", fmt(r.students), "студентов"),
-    stat("🎯", `${r.perfects}`, "идеально"),
+    stat("🏛️", `${r.height}`, "этажей", r.height),
+    stat("✨", fmt(r.score), "очков", r.score),
+    stat("🎓", fmt(r.students), "студентов", r.students),
+    stat("🎯", `${r.perfects}`, "идеально", r.perfects),
     stat("🔥", `×${r.bestCombo}`, "лучшее комбо"),
   );
 
@@ -160,6 +161,13 @@ export function resultScreen(app: App): Screen {
   return { el, backdrop: "tower" };
 }
 
-function stat(icon: string, value: string, label: string): HTMLElement {
-  return h("div.stat", null, h("span.stat-icon", null, icon), h("b", null, value), h("small", null, label));
+/** A result stat; numeric ones count up from zero as the card lands (300–400 ms). */
+function stat(icon: string, value: string, label: string, count?: number): HTMLElement {
+  const b = h("b.tween-num", null, value);
+  if (count !== undefined && count > 0 && !reducedMotion()) {
+    b.dataset.n = "0";
+    b.textContent = "0";
+    setTimeout(() => tweenNumber(b, count, fmt, count > 40 ? 400 : 300), 180);
+  }
+  return h("div.stat", null, h("span.stat-icon", null, icon), b, h("small", null, label));
 }

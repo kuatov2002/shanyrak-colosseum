@@ -12,17 +12,35 @@
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet" />
     <style>
       html, body { margin: 0; height: 100%; background: #141833; }
-      #boot { position: fixed; inset: 0; display: grid; place-items: center; color: #f2b84b; font: 700 20px system-ui, sans-serif; letter-spacing: 0.2em; }
-      #boot .boot-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-      #boot .boot-ring { width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(242, 184, 75, 0.25); border-top-color: #f2b84b; animation: boot-spin 0.9s linear infinite; }
-      #boot small { color: #b9b0cf; font: 500 13px system-ui, sans-serif; letter-spacing: 0.05em; }
+      #boot { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 0 24px; color: #f2b84b; font: 700 20px system-ui, sans-serif; background: radial-gradient(ellipse at 50% 38%, #2a2450 0%, #141833 70%); transition: opacity 0.38s cubic-bezier(0.33, 1, 0.68, 1); }
+      #boot.done { opacity: 0; pointer-events: none; }
+      #boot .boot-inner { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(300px, 100%); }
+      #boot .boot-mark { width: 64px; height: 64px; }
+      #boot .boot-mark circle, #boot .boot-mark path { fill: none; stroke: #f2b84b; stroke-width: 3; stroke-linecap: round; }
+      #boot .boot-mark .spin { transform-origin: 32px 32px; animation: boot-spin 6s linear infinite; }
+      #boot .boot-title { letter-spacing: 0.24em; font-size: 22px; }
+      #boot .boot-bar { position: relative; width: 100%; height: 6px; border-radius: 3px; background: rgba(242, 184, 75, 0.16); overflow: hidden; }
+      #boot .boot-bar i { position: absolute; inset: 0; background: linear-gradient(90deg, #e08a2e, #f2b84b); transform: scaleX(0); transform-origin: left; transition: transform 0.3s cubic-bezier(0.33, 1, 0.68, 1); }
+      #boot .boot-row { display: flex; justify-content: space-between; width: 100%; color: #b9b0cf; font: 500 12px system-ui, sans-serif; }
+      #boot .boot-pct { font-variant-numeric: tabular-nums; color: #f2b84b; }
+      #boot .boot-tip { min-height: 2.6em; color: #d8d0ea; font: 500 13px/1.3 system-ui, sans-serif; text-align: center; }
+      #boot .boot-tip.in { animation: boot-tip 0.32s cubic-bezier(0.33, 1, 0.68, 1); }
       @keyframes boot-spin { to { transform: rotate(360deg); } }
-      @media (prefers-reduced-motion: reduce) { #boot .boot-ring { animation-duration: 3s; } }
+      @keyframes boot-tip { from { opacity: 0; transform: translateY(6px); } }
+      @media (prefers-reduced-motion: reduce) { #boot .boot-mark .spin, #boot .boot-tip.in { animation: none; } }
     </style>
   </head>
   <body>
     <div id="app"></div>
-    <div id="boot" role="status"><div class="boot-inner"><div class="boot-ring" aria-hidden="true"></div><span>ШАНЫРАК</span><small>Загружаем кампус…</small></div></div>
+    <div id="boot" role="status" aria-live="polite">
+      <div class="boot-inner">
+        <svg class="boot-mark" viewBox="0 0 64 64" aria-hidden="true"><g class="spin"><circle cx="32" cy="32" r="27" /><path d="M32 5v54M5 32h54M12.9 12.9l38.2 38.2M51.1 12.9L12.9 51.1" opacity="0.55" /></g><circle cx="32" cy="32" r="9" /></svg>
+        <span class="boot-title">ШАНЫРАК</span>
+        <div class="boot-bar" role="progressbar" aria-label="Загрузка"><i></i></div>
+        <div class="boot-row"><span class="boot-stage">Загружаем кампус…</span><span class="boot-pct">0%</span></div>
+        <div class="boot-tip"></div>
+      </div>
+    </div>
     <noscript>Для игры нужен JavaScript.</noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>

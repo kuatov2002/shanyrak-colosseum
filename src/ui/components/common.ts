@@ -2,6 +2,7 @@
 
 import { RARITY_COLOR, RARITY_LABEL, type Rarity } from "../../meta/rooms";
 import { clear, h } from "../dom";
+import { stagger } from "../motion";
 
 export function button(
   label: string | Node | (string | Node)[],
@@ -137,6 +138,7 @@ export function modal(
   if (openModals.length === 1) document.addEventListener("keydown", onModalKey, true);
   document.body.appendChild(root);
   content(body, close);
+  stagger(body);
   // Content may focus its primary action itself (pause does); otherwise focus the dialog.
   if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
   return { close, body };

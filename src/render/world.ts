@@ -76,6 +76,11 @@ function hex(c: string): number {
   return (r << 16) | (g << 8) | b;
 }
 
+/** Yield to the browser so the loading bar can paint between heavy steps. */
+function nextFrame(): Promise<void> {
+  return new Promise((r) => (typeof requestAnimationFrame === "function" && !document.hidden ? requestAnimationFrame(() => r()) : setTimeout(r, 0)));
+}
+
 /** Wait (bounded) for the brand font so baked BitmapFonts use it. */
 async function loadFonts(): Promise<void> {
   try {
@@ -86,6 +91,17 @@ async function loadFonts(): Promise<void> {
   } catch {
     /* system font fallback */
   }
+}
+
+/** Critically damped spring towards a target (Unity's SmoothDamp). Returns [value, velocity]. */
+function smoothDamp(cur: number, target: number, vel: number, smoothTime: number, dt: number): [number, number] {
+  const omega = 2 / Math.max(0.0001, smoothTime);
+  const x = omega * dt;
+  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const change = cur - target;
+  const temp = (vel + omega * change) * dt;
+  const nextVel = (vel - omega * temp) * exp;
+  return [target + (change + temp) * exp, nextVel];
 }
 
 /** How many to spawn this frame for a per-second rate: frame-rate independent and unbiased. */
@@ -103,7 +119,19 @@ export class PixiRenderer {
   view: WorldView | null = null;
   opts: RenderOptions = { menu: true, guide: true, reducedMotion: false };
   focus = 0.5;
+  /** Effective world scale this frame (layout scale × camera zoom). */
   scale = 1;
+  /** Layout scale from the viewport (no zoom). */
+  private baseScale = 1;
+  private zoomCur = 1;
+  private camVelY = 0;
+  private camVelX = 0;
+  /** Punch-in timer (s) on a perfect landing. */
+  private punchT = 0;
+  /** Event-driven camera shake, decays exponentially. */
+  private shakeK = 0;
+  /** Opening pan from the campus up to the crane. */
+  private introT = 0;
   contextLost = false;
   /** Called when the WebGL context is lost (true) or restored (false). */
   onContextChange?: (lost: boolean) => void;
@@ -193,8 +221,10 @@ export class PixiRenderer {
     this.app = app;
   }
 
-  static async create(parent: HTMLElement): Promise<PixiRenderer> {
+  static async create(parent: HTMLElement, progress?: (p: number, label: string) => void): Promise<PixiRenderer> {
+    progress?.(0.08, "Шрифты…");
     await loadFonts();
+    progress?.(0.3, "Запускаем WebGL…");
     const app = new Application();
     await app.init({
       antialias: true,
@@ -221,8 +251,12 @@ export class PixiRenderer {
       r.contextLost = false;
       r.onContextChange?.(false);
     });
+    progress?.(0.5, "Рисуем кампус…");
+    await nextFrame();
     r.build();
     r.resize(parent.clientWidth || window.innerWidth, parent.clientHeight || window.innerHeight);
+    progress?.(0.72, "Собираем студентов…");
+    await nextFrame();
     return r;
   }
 
@@ -397,9 +431,10 @@ export class PixiRenderer {
     this.cssH = h;
     this.app.renderer.resize(w, h);
     // Portrait phones must show the whole swing (±~250 world units); landscape is height-bound.
-    this.scale = Math.max(0.5, Math.min(w / 500, h / 800, 1.6));
+    this.baseScale = Math.max(0.5, Math.min(w / 500, h / 800, 1.6));
+    this.scale = this.baseScale * this.zoomCur;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.bank.scale = Math.max(1.5, Math.min(3, Math.round(this.scale * dpr * 2) / 2));
+    this.bank.scale = Math.max(1.5, Math.min(3, Math.round(this.baseScale * dpr * 2) / 2));
     this.skySprite.width = w;
     this.skySprite.height = h;
     for (const ts of [this.mtn, this.hills, this.detail, this.lights, this.fg]) ts.width = w;
@@ -414,7 +449,7 @@ export class PixiRenderer {
   }
 
   get groundY(): number {
-    return this.cssH - 96 * this.scale;
+    return this.cssH - 96 * this.baseScale;
   }
 
   private screenX(x: number): number {
@@ -430,7 +465,19 @@ export class PixiRenderer {
   // ── Effects from round events ────────────────────────────────────────────
 
   attach(events: { on(fn: (e: RoundEvent) => void): () => void }, cosmetics: Equipped): () => void {
+    // Opening shot: start low and wide on the campus, then pan up to the crane.
+    if (!this.opts.reducedMotion) {
+      this.introT = 1.5;
+      this.camY = 0;
+      this.camVelY = 0;
+      this.zoomCur = 0.84;
+    }
     return events.on((e) => this.onEvent(e, cosmetics));
+  }
+
+  /** Camera shake by severity (0.5 light … 10 collapse); decays on its own. */
+  private shakeBy(amount: number): void {
+    this.shakeK = Math.max(this.shakeK, amount);
   }
 
   private settleBurst(effect: string, x: number, y: number, n: number): void {
@@ -467,20 +514,25 @@ export class PixiRenderer {
           p.burst("glow", e.x, e.y, 10, { speed: 90, size: 6, color: "#ffe9a8", g: 40, life: 0.8 });
           p.spawn({ kind: "ring", x: e.x, y: e.y, size: 10, life: 0.5, color: "#ffe9a8" });
           this.kick = 0.25;
+          this.punchT = 0.12;
           const top = this.view?.tower.top;
           if (top) this.blocks.get(top.id)?.cheer();
         } else if (e.q === "good") {
+          this.shakeBy(0.6);
           this.settleBurst(cos.effect, e.x, e.y, 12);
           p.burst("dust", e.x, e.y, 6, { speed: 80, size: 7, color: "#e9dcc0", g: 30, life: 0.7 });
         } else if (e.q === "normal") {
+          this.shakeBy(1.3);
           p.burst("dust", e.x, e.y, 10, { speed: 110, size: 8, color: "#d8cbb0", g: 20, life: 0.8 });
         } else {
+          this.shakeBy(e.q === "bad" ? 3 : 4.5);
           p.burst("dust", e.x, e.y, 16, { speed: 140, size: 9, color: "#bfae8f", g: 10, life: 1 });
           p.burst("chip", e.x, e.y, 10, { speed: 220, size: 5, colors: ["#7a5a3a", "#5d4e43", "#a88b6a"], g: -900, life: 1.2 });
         }
         if (e.students > 0) p.burst("glow", e.x, e.y - 25, Math.min(12, e.students), { speed: 50, size: 4, color: "#ffd27a", g: 60, life: 1 });
         break;
       case "miss":
+        this.shakeBy(5);
         p.burst("chip", e.x, e.y, 18, { speed: 260, size: 6, colors: ["#7a5a3a", "#5d4e43", "#a88b6a"], g: -900, life: 1.4 });
         p.burst("dust", e.x, e.y, 14, { speed: 120, size: 10, color: "#bfae8f", g: 10, life: 1 });
         break;
@@ -496,6 +548,7 @@ export class PixiRenderer {
         p.burst("coin", e.x, e.y + 20, 6, { speed: 160, size: 5, g: -500, life: 1.1 });
         break;
       case "collapse":
+        this.shakeBy(10);
         if (this.view) {
           const y = this.view.tower.topY;
           p.burst("dust", 0, y, 110, { speed: 240, size: 14, color: "#bfae8f", g: 10, life: 1.8, spread: 180 });
@@ -537,13 +590,25 @@ export class PixiRenderer {
     this.time += dt;
     this.frameDt = dt;
     this.particles.reduced = this.opts.reducedMotion;
+    this.hudUi.reducedMotion = this.opts.reducedMotion;
     this.particles.update(dt);
     this.hudUi.update(dt);
     const v = this.view;
     if (!v) return;
     this.focusCur += (this.focus - this.focusCur) * Math.min(1, dt * 3);
 
-    // Camera
+    // Camera zoom: gentle zoom-out as the tower grows, a 120 ms punch-in on "Perfect", a slow
+    // push-in on the shanyrak at the finale, and the wide opening shot easing back to 1.
+    const crowning = !this.opts.menu && (v.phase === "crowning" || v.crowned);
+    let zoomTarget = this.opts.menu ? 1 : 1 - Math.min(0.14, Math.max(0, v.height - 6) * 0.006);
+    if (crowning) zoomTarget = 1.12;
+    this.introT = Math.max(0, this.introT - dt);
+    this.zoomCur += (zoomTarget - this.zoomCur) * Math.min(1, dt * (this.introT > 0 ? 1.6 : crowning ? 1.2 : 2.5));
+    this.punchT = Math.max(0, this.punchT - dt);
+    const punch = this.opts.reducedMotion || this.punchT <= 0 ? 0 : 0.06 * Math.sin(Math.PI * (1 - this.punchT / 0.12));
+    this.scale = this.baseScale * this.zoomCur * (1 + punch);
+
+    // Camera follow: critically damped spring (no overshoot, no lag jumps)
     const topY = v.tower.topY;
     let target: number;
     if (this.opts.menu) {
@@ -551,13 +616,15 @@ export class PixiRenderer {
       const visible = (this.groundY - this.cssH * 0.2) / this.scale;
       target = Math.max(0, fullH - visible);
     } else {
-      const anchor = this.cssH * 0.56;
+      const anchor = this.cssH * (crowning ? 0.62 : 0.56);
       target = Math.max(0, topY - (this.groundY - anchor) / this.scale);
-      if (v.phase === "crowning") target += 40;
+      if (crowning) target += 40;
     }
-    this.camY += (target - this.camY) * Math.min(1, dt * (this.opts.menu ? 2 : 3.2));
-    const topX = v.tower.blocks.length > 1 ? v.tower.visualX(v.tower.top) * 0.35 : 0;
-    this.camX += (topX - this.camX) * Math.min(1, dt * 1.5);
+    [this.camY, this.camVelY] = smoothDamp(this.camY, target, this.camVelY, this.opts.menu ? 0.6 : this.introT > 0 ? 0.55 : 0.3, dt);
+    const topX = v.tower.blocks.length > 1 ? v.tower.visualX(v.tower.top) * (crowning ? 0.8 : 0.35) : 0;
+    [this.camX, this.camVelX] = smoothDamp(this.camX, topX, this.camVelX, 0.6, dt);
+    this.shakeK *= Math.exp(-dt * 7);
+    if (this.shakeK < 0.02) this.shakeK = 0;
 
     if (v.event) this.lastEvent = v.event.id;
     this.eventK += ((v.event ? 1 : 0) - this.eventK) * Math.min(1, dt * 1.2);
@@ -651,9 +718,10 @@ export class PixiRenderer {
     }
 
     // Shake (screen-space offset)
-    const shakeAmp = this.opts.reducedMotion ? 0 : v.shake * 7 + this.kick * 3;
-    const ox = (Math.random() - 0.5) * shakeAmp;
-    const oy = (Math.random() - 0.5) * shakeAmp;
+    // Shake: gameplay tremor (deadline) + decaying impact shake, smooth rather than jittery
+    const shakeAmp = this.opts.reducedMotion ? 0 : v.shake * 6 + this.shakeK + this.kick * 1.5;
+    const ox = shakeAmp * (Math.sin(this.time * 47) * 0.6 + Math.sin(this.time * 83 + 1.3) * 0.4) * 0.5;
+    const oy = shakeAmp * (Math.cos(this.time * 41) * 0.6 + Math.sin(this.time * 67 + 0.7) * 0.4) * 0.5;
 
     // Sky & landscape
     this.sky.paint(th.top, th.bottom);

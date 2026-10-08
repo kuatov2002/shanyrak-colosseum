@@ -7,6 +7,7 @@ import { FACULTIES } from "../../social/faculties";
 import { shortAddress } from "../../social/leaderboards";
 import type { App, ScreenId } from "../app";
 import { fmt, h } from "../dom";
+import { tweenNumber } from "../motion";
 import { openInfo } from "./guide";
 
 export const AVATARS = ["🦅", "🐎", "🐆", "🦉", "🐺", "🦌"];
@@ -24,6 +25,17 @@ export function questBadge(app: App): number {
   }
   if (streakClaimable(app.store)) n++;
   return n;
+}
+
+// The topbar is rebuilt on every refresh; remember what it last showed so $SHAI counts up/down
+// from there instead of jumping.
+let shaiShown: number | null = null;
+function shaiCount(value: number): HTMLElement {
+  const from = shaiShown ?? value;
+  shaiShown = value;
+  const el = h("span.pill-num", { "data-n": String(from) }, fmt(from));
+  if (from !== value) tweenNumber(el, value, (n) => fmt(Math.round(n)), 360);
+  return el;
 }
 
 export function topBar(app: App): HTMLElement {
@@ -57,7 +69,7 @@ export function topBar(app: App): HTMLElement {
         "button.pill.pill-shai",
         { type: "button", onclick: () => openInfo(app, "shai"), title: "$SHAI — игровые монеты. Нажмите, чтобы узнать больше", "aria-label": `$SHAI: ${fmt(d.shai)}. Что это?` },
         h("i", null, "🪙"),
-        fmt(d.shai),
+        shaiCount(d.shai),
         h("small.pill-label", null, "$SHAI"),
       ),
       h(

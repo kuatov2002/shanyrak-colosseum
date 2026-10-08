@@ -13,6 +13,7 @@ import type { Leaderboards } from "../social/leaderboards";
 import type { SolanaActions } from "../solana/actions";
 import type { WalletManager } from "../solana/wallet";
 import { clear, h } from "./dom";
+import { stagger } from "./motion";
 
 export type ScreenId =
   | "home"
@@ -83,13 +84,16 @@ export class Router {
       old.screen.destroy?.();
       const el = old.screen.el;
       el.classList.add("screen-leave");
-      setTimeout(() => el.remove(), 200);
+      setTimeout(() => el.remove(), 240);
     }
     this.onNavigate?.(id);
     const screen = f(this.app, params);
     screen.el.classList.add("screen", "screen-enter");
     this.root.appendChild(screen.el);
-    requestAnimationFrame(() => screen.el.classList.remove("screen-enter"));
+    // Commit the start state, then let it transition in (no rAF: works in background tabs too).
+    void screen.el.offsetWidth;
+    screen.el.classList.remove("screen-enter");
+    stagger(screen.el);
     this.current = { id, screen };
     document.body.dataset.screen = id;
     document.body.dataset.backdrop = screen.backdrop ?? "tower";

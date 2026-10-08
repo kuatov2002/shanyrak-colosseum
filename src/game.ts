@@ -26,6 +26,7 @@ import { SolanaActions } from "./solana/actions";
 import { WalletManager } from "./solana/wallet";
 import { Router, type App, type ScreenId, type StartOptions } from "./ui/app";
 import { button, toast } from "./ui/components/common";
+import { bootDone, bootProgress } from "./ui/boot";
 import { h } from "./ui/dom";
 import { campaignScreen } from "./ui/screens/campaign";
 import { facultyScreen } from "./ui/screens/faculty";
@@ -111,7 +112,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
   sound.setVolumes(store.data.settings.sfx, store.data.settings.music);
   sound.setTheme(store.data.equipped.music as "mus_campus");
 
-  const renderer = await PixiRenderer.create(root);
+  const renderer = await PixiRenderer.create(root, bootProgress);
   const uiRoot = h("div#ui");
   root.appendChild(uiRoot);
   const menuScene = new MenuScene(store.data.lastTower, store.data.player.faculty, { ...store.data.equipped });
@@ -238,25 +239,32 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
     renderer.opts.menu = true;
   }
 
+  // Haptics: a short tick (10–25 ms) on phones only, and only when the player keeps it on.
+  const coarsePointer = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
+  const buzz = (ms: number) => {
+    if (coarsePointer && store.data.settings.vibration) sound.vibrate(ms);
+  };
+
   function onRoundEvent(round: Round, e: RoundEvent): void {
-    const vib = store.data.settings.vibration;
     switch (e.k) {
       case "drop":
         sound.drop();
         break;
       case "land":
-        if (e.q === "perfect") sound.perfect(round.combo);
-        else if (e.q === "good") sound.good();
+        if (e.q === "perfect") {
+          sound.perfect(round.combo);
+          buzz(12);
+        } else if (e.q === "good") sound.good();
         else if (e.q === "normal") sound.thud();
         else {
           sound.bad();
-          if (vib) sound.vibrate(60);
+          buzz(18);
         }
         if (e.shai > 0 && e.q === "perfect") setTimeout(() => sound.coin(), 120);
         break;
       case "miss":
         sound.miss();
-        if (vib) sound.vibrate([40, 40, 80]);
+        buzz(22);
         break;
       case "combo":
         sound.coin();
@@ -280,7 +288,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
         break;
       case "collapse":
         sound.collapse();
-        if (vib) sound.vibrate([80, 60, 160]);
+        buzz(25);
         break;
       case "crowned":
         sound.crown();
@@ -449,7 +457,11 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
   }
   void goOnline();
   listen(window, "beforeunload", () => store.flush());
-  document.getElementById("boot")?.remove();
+  // First frame on screen before the loader fades (the ticker may not have drawn yet).
+  bootProgress(0.92, "Первый кадр…");
+  renderer.update(0);
+  renderer.app.render();
+  bootDone();
 
   return {
     setRunning(running: boolean) {

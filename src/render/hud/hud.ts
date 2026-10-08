@@ -83,7 +83,48 @@ class Chip extends Container {
   }
 }
 
+/** A HUD number that counts to its new value (ease-out cubic) instead of jumping. */
+class Counter {
+  private shown = 0;
+  private from = 0;
+  private to = 0;
+  private t = 1;
+  private ready = false;
+  set(v: number, instant: boolean): void {
+    if (!this.ready || instant) {
+      this.shown = this.from = this.to = v;
+      this.t = 1;
+      this.ready = true;
+    } else if (v !== this.to) {
+      this.from = this.shown;
+      this.to = v;
+      this.t = 0;
+    }
+  }
+  get value(): number {
+    return Math.round(this.shown);
+  }
+  step(dt: number, dur: number): number {
+    if (this.t < 1) {
+      this.t = Math.min(1, this.t + dt / dur);
+      this.shown = this.from + (this.to - this.from) * (1 - Math.pow(1 - this.t, 3));
+    }
+    return Math.round(this.shown);
+  }
+}
+
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+/** Ease-out with a ~5% overshoot (peaks near 1.05). */
+const backOut = (t: number) => {
+  const u = t - 1;
+  return 1 + 2.15 * u * u * u + 1.15 * u * u;
+};
+/** Scale track for a pop-in that overshoots to 1.05 and settles: from → 1.05 → 1. */
+const overshoot = (k: number, from: number) => (k < 0.6 ? from + (1.05 - from) * easeOut(k / 0.6) : 1.05 - 0.05 * easeOut((k - 0.6) / 0.4));
+
 export class Hud extends Container {
+  /** Set by the renderer from the player's settings: numbers jump, cards and banners just appear. */
+  reducedMotion = false;
   private round: Round | null = null;
   private cb: HudCallbacks | null = null;
   private unsub: (() => void) | null = null;
@@ -138,6 +179,8 @@ export class Hud extends Container {
   private hintY = 0;
   /** Last values formatted into HUD text (formatting only on change, not every frame). */
   private shown = { score: -1, shai: -1, students: -1 };
+  private counts = { score: new Counter(), shai: new Counter(), students: new Counter(), combo: new Counter() };
+  private bannerBaseY = 0;
   private comboShab = false;
   private crownBtn: PixiButton;
   private skipBtn: PixiButton;
@@ -146,9 +189,12 @@ export class Hud extends Container {
   private offerDim = new Graphics();
   private offerTitle!: BitmapText;
   private offerSub!: BitmapText;
-  private offerCards: { id: BonusId; c: Container; frame: NineSliceSprite; bg: NineSliceSprite; hover: boolean }[] = [];
+  private offerCards: { id: BonusId; c: Container; frame: NineSliceSprite; bg: NineSliceSprite; hover: boolean; baseX: number; baseY: number }[] = [];
   private offerFocus = -1;
   private offerT = 0;
+  /** Index of the picked card while the offer plays its outro (gameplay has already resumed). */
+  private offerPicked = -1;
+  private offerOutT = 0;
 
   constructor(
     private readonly skin: Skin,
@@ -255,7 +301,7 @@ export class Hud extends Container {
   }
 
   get offerOpen(): boolean {
-    return this.offer.visible;
+    return this.offer.visible && this.offerPicked < 0;
   }
 
   /** Landscape phones (e.g. 812×375): one top row and two side columns keep the swing column clear. */
@@ -272,6 +318,7 @@ export class Hud extends Container {
     this.bonusKey = "";
     this.lastCombo = 0;
     this.shown = { score: -1, shai: -1, students: -1 };
+    this.counts = { score: new Counter(), shai: new Counter(), students: new Counter(), combo: new Counter() };
     this.banner.visible = false;
     this.offer.visible = false;
     const cfg = round.cfg;
@@ -404,7 +451,7 @@ export class Hud extends Container {
       c.addChild(bg, frame, ic, num, name, desc, tag);
       c.eventMode = "static";
       c.cursor = "pointer";
-      const entry = { id, c, frame, bg, hover: false };
+      const entry = { id, c, frame, bg, hover: false, baseX: 0, baseY: 0 };
       c.on("pointerover", (e: FederatedPointerEvent) => {
         if (e.pointerType === "mouse") entry.hover = true;
       });
@@ -419,13 +466,24 @@ export class Hud extends Container {
     });
     this.offerFocus = -1;
     this.offerT = 0;
+    this.offerPicked = -1;
+    this.offerOutT = 0;
+    this.offerDim.eventMode = "static";
+    this.offerDim.alpha = 1;
+    this.offerTitle.alpha = 1;
+    this.offerSub.alpha = 1;
     this.offer.visible = true;
     this.layoutOffer();
   }
 
   private pick(id: BonusId): void {
-    if (!this.offer.visible) return;
-    this.offer.visible = false;
+    if (!this.offerOpen) return;
+    // The round resumes right away; the chosen card pulses while the rest fade (input passes through).
+    this.offerPicked = Math.max(0, this.offerCards.findIndex((c) => c.id === id));
+    this.offerOutT = 0;
+    this.offerDim.eventMode = "none";
+    for (const card of this.offerCards) card.c.eventMode = "none";
+    if (this.reducedMotion) this.offer.visible = false;
     this.cb?.onPickBonus(id);
   }
 
@@ -440,7 +498,7 @@ export class Hud extends Container {
   /** Keyboard support; returns true when the key was consumed. */
   handleKey(code: string): boolean {
     if (!this.attached) return false;
-    if (this.offer.visible) {
+    if (this.offerOpen) {
       const n = this.offerCards.length;
       const digit = /^(Digit|Numpad)([1-4])$/.exec(code);
       if (digit) {
@@ -563,6 +621,7 @@ export class Hud extends Container {
     this.banner.pivot.set(bw / 2, bh / 2);
     if (short) this.banner.position.set(12 + bw / 2, this.h * 0.62);
     else this.banner.position.set(this.w / 2, this.h * 0.36);
+    this.bannerBaseY = this.banner.y;
   }
 
   private layoutOffer(): void {
@@ -618,7 +677,11 @@ export class Hud extends Container {
         tag.position.set((cardW - tag.w) / 2, cardH - tag.h - 12);
         c.position.set(x0 + i * (cardW + gap), y0);
       }
-      c.pivot.set(0, 0);
+      // pivot at the centre so cards flip and pulse in place
+      card.baseX = c.x + cardW / 2;
+      card.baseY = c.y + cardH / 2;
+      c.pivot.set(cardW / 2, cardH / 2);
+      c.position.set(card.baseX, card.baseY);
     });
   }
 
@@ -632,17 +695,26 @@ export class Hud extends Container {
       if (t.text !== v) t.text = v;
     };
     set(this.heightText, String(r.height));
-    if (r.score !== this.shown.score) {
-      this.shown.score = r.score;
-      set(this.scoreText, `${fmtNum(r.score)} очков`);
+    // score, $SHAI and students count up over ~300 ms instead of jumping
+    const rm = this.reducedMotion;
+    const cnt = this.counts;
+    cnt.score.set(r.score, rm);
+    cnt.shai.set(r.shai, rm);
+    cnt.students.set(r.students, rm);
+    const score = cnt.score.step(dt, 0.34);
+    const shai = cnt.shai.step(dt, 0.3);
+    const students = cnt.students.step(dt, 0.3);
+    if (score !== this.shown.score) {
+      this.shown.score = score;
+      set(this.scoreText, `${fmtNum(score)} очков`);
     }
-    if (r.shai !== this.shown.shai) {
-      this.shown.shai = r.shai;
-      this.shaiPill.set(fmtNum(r.shai));
+    if (shai !== this.shown.shai) {
+      this.shown.shai = shai;
+      this.shaiPill.set(fmtNum(shai));
     }
-    if (r.students !== this.shown.students) {
-      this.shown.students = r.students;
-      this.studentPill.set(fmtNum(r.students));
+    if (students !== this.shown.students) {
+      this.shown.students = students;
+      this.studentPill.set(fmtNum(students));
     }
     const right = this.w - this.pauseBtn.buttonWidth - 16;
     this.shaiPill.position.set(right - this.shaiPill.w - this.studentPill.w - 6, 14);
@@ -704,9 +776,12 @@ export class Hud extends Container {
       if (r.combo > this.lastCombo) this.comboPop = 1;
       this.lastCombo = r.combo;
     }
+    // combo counts up too; a reset drops instantly
+    cnt.combo.set(r.combo, rm || r.combo < cnt.combo.value);
+    const comboShown = cnt.combo.step(dt, 0.25);
     this.combo.visible = r.combo >= 2;
     if (this.combo.visible) {
-      set(this.comboText, `×${r.combo}`);
+      set(this.comboText, `×${Math.max(2, comboShown)}`);
       set(this.comboLabel, r.shabytLevel > 0 ? "ШАБЫТ" : "КОМБО");
       this.comboLabel.position.set(0, 36);
       const shab = r.shabytLevel > 0;
@@ -762,9 +837,12 @@ export class Hud extends Container {
     // banner fade
     if (this.banner.visible) {
       this.bannerT += dt;
-      const pop = Math.min(1, this.bannerT / 0.25);
-      this.banner.scale.set(0.85 + 0.15 * (1 - Math.pow(1 - pop, 3)));
-      this.banner.alpha = this.bannerT > this.bannerDur - 0.3 ? Math.max(0, (this.bannerDur - this.bannerT) / 0.3) : pop;
+      const k = rm ? 1 : Math.min(1, this.bannerT / 0.34);
+      const out = rm ? 0 : Math.max(0, 1 - (this.bannerDur - this.bannerT) / 0.26);
+      // slides down into place with a 1.05 overshoot, slides back up as it auto-hides
+      this.banner.scale.set(overshoot(k, 0.9));
+      this.banner.y = this.bannerBaseY - (1 - easeOut(k)) * 18 - easeOut(Math.min(1, out)) * 12;
+      this.banner.alpha = Math.min(1, k * 2.5) * Math.max(0, 1 - out);
       if (this.bannerT > this.bannerDur) this.banner.visible = false;
     }
     // hint bob
@@ -772,15 +850,41 @@ export class Hud extends Container {
     // offer animation & focus
     if (this.offer.visible) {
       this.offerT += dt;
+      const picked = this.offerPicked;
+      if (picked >= 0) this.offerOutT += dt;
+      const out = picked >= 0 ? Math.min(1, this.offerOutT / 0.34) : 0;
+      this.offerDim.alpha = 1 - easeOut(out);
+      this.offerTitle.alpha = this.offerSub.alpha = 1 - out;
       this.offerCards.forEach((card, i) => {
-        const appear = Math.min(1, Math.max(0, (this.offerT - i * 0.06) / 0.25));
+        // flip in around the vertical axis, staggered, rising a little
+        const appear = rm ? 1 : Math.min(1, Math.max(0, (this.offerT - 0.05 - i * 0.07) / 0.36));
         const focused = this.offerFocus === i;
-        card.frame.alpha = card.hover || focused ? 1 : 0.5;
+        const active = card.hover || focused;
+        const pulse = 0.5 + 0.5 * Math.sin(this.time * 7);
+        card.frame.alpha = active ? 0.7 + 0.3 * pulse : 0.5;
         card.frame.tint = focused ? 0xffd75e : 0xf2b84b;
-        card.c.alpha = appear;
-        const lift = (card.hover || focused ? -4 : 0) + (1 - appear) * 16;
-        card.c.pivot.y = -lift;
+        let sx = Math.max(0.02, backOut(appear));
+        let sy = 1;
+        let alpha = Math.min(1, appear * 3);
+        let lift = (active ? -4 : 0) + (1 - easeOut(appear)) * 18;
+        if (picked === i) {
+          // chosen: frame flares and the card pulses once, then fades
+          const p = Math.min(1, this.offerOutT / 0.2);
+          sx = sy = 1 + 0.06 * Math.sin(p * Math.PI);
+          card.frame.alpha = 1;
+          card.frame.tint = 0xffd75e;
+          alpha = this.offerOutT < 0.2 ? 1 : Math.max(0, 1 - (this.offerOutT - 0.2) / 0.14);
+          lift = -4;
+        } else if (picked >= 0) {
+          alpha *= Math.max(0, 1 - out * 1.8);
+          sx *= 1 - 0.06 * out;
+          sy = 1 - 0.06 * out;
+        }
+        card.c.alpha = alpha;
+        card.c.scale.set(sx, sy);
+        card.c.position.set(card.baseX, card.baseY + lift);
       });
+      if (picked >= 0 && this.offerOutT >= 0.34) this.offer.visible = false;
     }
   }
 }

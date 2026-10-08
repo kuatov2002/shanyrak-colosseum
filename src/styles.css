@@ -21,6 +21,11 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --font: "Rubik", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* motion: one ease family; screens 220 ms, presses 80 ms, overshoot only for toasts/banners */
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+  --ease-back: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --t-screen: 220ms;
+  --t-press: 80ms;
   color-scheme: dark;
 }
 
@@ -44,9 +49,9 @@ canvas.world { position: absolute; inset: 0; display: block; }
 #ui { position: absolute; inset: 0; pointer-events: none; transition: background 0.35s; }
 body[data-backdrop="dim"] #ui { background: rgba(10, 8, 30, 0.6); }
 body[data-backdrop="tower"] #ui { background: linear-gradient(180deg, rgba(10, 8, 30, 0.45) 0%, rgba(10, 8, 30, 0) 26%, rgba(10, 8, 30, 0) 52%, rgba(10, 8, 30, 0.72) 100%); }
-.screen { position: absolute; inset: 0; pointer-events: auto; transition: opacity 0.26s ease, transform 0.26s ease; }
-.screen-enter { opacity: 0; transform: translateY(14px); }
-.screen-leave { opacity: 0; pointer-events: none; }
+.screen { position: absolute; inset: 0; pointer-events: auto; transition: opacity var(--t-screen) var(--ease-out), transform var(--t-screen) var(--ease-out); }
+.screen-enter { opacity: 0; transform: translateY(12px); }
+.screen-leave { opacity: 0; transform: translateY(-6px); pointer-events: none; transition-duration: 180ms; }
 .hud.screen { pointer-events: none; }
 h1, h2, h3 { margin: 0.2em 0; letter-spacing: 0.01em; }
 h2 { font-size: 22px; }
@@ -198,8 +203,8 @@ main.scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; over
 
 /* ── Toasts ──────────────────────────────────────────── */
 .toasts { position: fixed; top: calc(10px + var(--safe-top)); left: 50%; transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(92vw, 460px); }
-.toast { background: rgba(30, 27, 68, 0.96); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; display: flex; gap: 8px; align-items: center; font-weight: 500; font-size: 14px; box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4); animation: rise-in 0.3s ease; transition: opacity 0.4s, transform 0.4s; }
-.toast.out { opacity: 0; transform: translateY(-10px); }
+.toast { background: rgba(30, 27, 68, 0.96); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; display: flex; gap: 8px; align-items: center; font-weight: 500; font-size: 14px; box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4); animation: toast-in 0.36s var(--ease-out) both; transition: opacity 0.26s var(--ease-out), transform 0.26s var(--ease-out); }
+.toast.out { opacity: 0; transform: translateY(-14px) scale(0.96); }
 .toast-success { border-color: rgba(79, 208, 138, 0.5); }
 .toast-reward { border-color: var(--gold); background: linear-gradient(90deg, rgba(242, 184, 75, 0.25), rgba(30, 27, 68, 0.96)); }
 .toast-warn, .toast-error { border-color: rgba(224, 72, 72, 0.6); }
@@ -430,6 +435,8 @@ main.scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; over
 /* ── Animations ──────────────────────────────────────── */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fade-out { to { opacity: 0; } }
+@keyframes toast-in { 0% { opacity: 0; transform: translateY(-18px) scale(0.94); } 62% { opacity: 1; transform: translateY(2px) scale(1.05); } 100% { opacity: 1; transform: none; } }
+@keyframes stagger-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes pop { 0% { transform: translateX(-50%) scale(0.6); } 100% { transform: translateX(-50%) scale(1); } }
 @keyframes banner-in { 0% { opacity: 0; transform: translateX(-50%) scale(0.8); } 100% { opacity: 1; transform: translateX(-50%) scale(1); } }
@@ -645,3 +652,26 @@ button.net-dot { background: none; border: none; cursor: pointer; font-family: v
 @media (max-width: 520px) { .wallet-step .grid-cards.badges { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wallet-step .badge-img.small { width: 72px; height: 72px; } }
 .wallet-step .item-card small { font-size: 11.5px; }
 .wallet-step .item-card b { font-size: 14px; line-height: 1.2; }
+
+/* ── Micro-interactions (stage 7.3) ──────────────────────
+   Press: scale 0.96 in 80 ms for every tappable thing. Hover lift 2px + shadow only for real
+   pointers. One focus-visible ring everywhere (keyboard only). Works with the 9-slice skin. */
+.btn, .icon-btn, .pill, .home-card, .mode-card, .faculty-card, .wallet-option, .profile-chip, .nav-item, .help-chip {
+  transition: transform var(--t-press) var(--ease-out), box-shadow 160ms var(--ease-out), filter 160ms var(--ease-out), border-color 160ms;
+}
+.ds-ready .btn { transition: transform var(--t-press) var(--ease-out), filter 160ms var(--ease-out); }
+.btn:active:not(:disabled), .ds-ready .btn:active:not(:disabled), .icon-btn:active, button.pill:active, .home-card:active, .mode-card:active,
+.faculty-card:active, .wallet-option:active, .profile-chip:active, .nav-item:active, .help-chip:active { transform: scale(0.96); transition-duration: var(--t-press); }
+@media (hover: hover) {
+  .btn:hover:not(:disabled):not(:active), .ds-ready .btn:hover:not(:disabled):not(:active) { transform: translateY(-2px); filter: brightness(1.05) drop-shadow(0 6px 8px rgba(8, 6, 24, 0.45)); }
+  .icon-btn:hover:not(:active), button.pill:hover:not(:active), .home-card:hover:not(:active), .mode-card:hover:not(:active),
+  .wallet-option:hover:not(:active), .profile-chip:hover:not(:active) { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(8, 6, 24, 0.4); }
+}
+:where(button, a, [tabindex], input, select, summary):focus-visible,
+.btn:focus-visible, .ds-ready .btn:focus-visible { outline: 2px solid var(--gold-2); outline-offset: 3px; border-radius: 12px; }
+:where(button, a, [tabindex], input, select):focus:not(:focus-visible) { outline: none; }
+.modal:focus-visible { outline: none; }
+/* list stagger (ui/motion.ts sets --stagger per item) */
+.stagger { animation: stagger-in 220ms var(--ease-out) both; animation-delay: var(--stagger, 0ms); }
+/* number pills keep their width while counting */
+.pill-num, .tween-num { font-variant-numeric: tabular-nums; }
