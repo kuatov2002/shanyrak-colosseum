@@ -270,6 +270,43 @@ function drawBar(kind: "track" | "fill"): HTMLCanvasElement {
   return c;
 }
 
+/**
+ * Felt (kiiz) fibre texture for the DOM panels: a seamless tile of short random fibres and
+ * speckles, mostly transparent, laid over the panel gradient by CSS (--felt-tex).
+ */
+function drawFelt(): HTMLCanvasElement {
+  const S = 192;
+  const c = document.createElement("canvas");
+  c.width = S;
+  c.height = S;
+  const ctx = c.getContext("2d") as CanvasRenderingContext2D;
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  ctx.lineCap = "round";
+  for (let i = 0; i < 2600; i++) {
+    const x = rnd() * S;
+    const y = rnd() * S;
+    const a = rnd() * Math.PI * 2;
+    const len = 2 + rnd() * 7;
+    const light = rnd() < 0.55;
+    ctx.strokeStyle = light ? `rgba(255,255,255,${0.025 + rnd() * 0.05})` : `rgba(0,0,0,${0.05 + rnd() * 0.08})`;
+    ctx.lineWidth = 0.6 + rnd() * 0.7;
+    // draw wrapped copies so the tile is seamless
+    for (const ox of [-S, 0, S]) {
+      for (const oy of [-S, 0, S]) {
+        const sx = x + ox;
+        const sy = y + oy;
+        if (sx < -10 || sx > S + 10 || sy < -10 || sy > S + 10) continue;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.quadraticCurveTo(sx + Math.cos(a + 0.6) * len * 0.5, sy + Math.sin(a + 0.6) * len * 0.5, sx + Math.cos(a) * len, sy + Math.sin(a) * len);
+        ctx.stroke();
+      }
+    }
+  }
+  return c;
+}
+
 export interface Skin {
   tokens: Tokens;
   button(kind: ButtonKind, state: ButtonState): Texture;
@@ -309,6 +346,7 @@ export function buildSkin(): Skin {
   root.setProperty("--ds-panel", `url("${panelC.toDataURL("image/png")}")`);
   root.setProperty("--ds-cream", `url("${creamC.toDataURL("image/png")}")`);
   root.setProperty("--ds-chip", `url("${chipC.toDataURL("image/png")}")`);
+  root.setProperty("--felt-tex", `url("${drawFelt().toDataURL("image/png")}")`);
   document.documentElement.classList.add("ds-ready");
   cached = {
     tokens: t,

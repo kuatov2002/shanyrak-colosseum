@@ -103,7 +103,7 @@ export function bottomNav(app: App, active: ScreenId): HTMLElement {
       h(
         `button.nav-item${it.id === active ? ".active" : ""}`,
         { type: "button", onclick: () => it.id !== active && app.router.go(it.id) },
-        h("span.nav-icon", null, it.icon),
+        h("span.nav-medal", null, h("span.nav-icon", null, it.icon)),
         h("span.nav-label", null, it.label),
         it.badge ? h("span.badge", null, String(it.badge)) : null,
       ),

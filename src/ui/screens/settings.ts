@@ -1,7 +1,7 @@
 // Settings: sound, motion, guide, online mode, analytics transparency, tutorial replay, reset.
 
 import type { App, Screen } from "../app";
-import { button, modal, toast } from "../components/common";
+import { button, modal, screenIntro, toast } from "../components/common";
 import { hub } from "../components/shell";
 import { h } from "../dom";
 
@@ -15,7 +15,7 @@ export function settingsScreen(app: App): Screen {
       h(
         "label.setting",
         null,
-        h("span", null, label),
+        h("span", null, h("b.setting-label", null, label)),
         h("input", {
           type: "range",
           min: "0",
@@ -34,7 +34,7 @@ export function settingsScreen(app: App): Screen {
       );
     shell.body.append(
       h("div.back-row", null, button("← Кампус", () => app.router.go("home"), { kind: "ghost" })),
-      h("h2", null, "Настройки"),
+      screenIntro("⚙️", "Настройки", "Громкость, движение на экране и онлайн-рейтинги."),
       slider("🎵 Музыка", s.music, (v) => {
         app.store.mutate((x) => (x.settings.music = v));
         app.sound.setVolumes(app.store.data.settings.sfx, v, app.store.data.settings.ambient);

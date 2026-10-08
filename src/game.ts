@@ -4,6 +4,7 @@
 // tutorial; no wallet, no login screen.
 
 import "./styles.css";
+import "./ui/theme.css";
 import { Analytics } from "./analytics/events";
 import { Sound } from "./audio/sound";
 import { GameLoop } from "./core/loop";

@@ -2,7 +2,7 @@
 
 import { RARITY_COLOR, RARITY_LABEL, type Rarity } from "../../meta/rooms";
 import { emptyArt, type IconName } from "../../design/glyphs";
-import { clear, h } from "../dom";
+import { append, clear, h } from "../dom";
 import { stagger } from "../motion";
 
 export function button(
@@ -20,8 +20,8 @@ export function button(
       if (!b.disabled) onClick();
     },
   });
-  const parts = Array.isArray(label) ? label : [label];
-  for (const p of parts) b.append(p);
+  // through the DOM helper, so emoji in labels become the shared vector icons
+  append(b, Array.isArray(label) ? label : [label]);
   return b;
 }
 
@@ -39,8 +39,14 @@ export function chip(text: string, cls = ""): HTMLElement {
 }
 
 /** One-line "what is this screen" header shared by every hub screen. */
+/** Screen header: the icon in a felt medallion, the title in the display face, one line of help. */
 export function screenIntro(icon: string, title: string, text: string): HTMLElement {
-  return h("div.screen-intro", null, h("span.si-icon", { "aria-hidden": "true" }, icon), h("div", null, h("h2", null, title), h("p", null, text)));
+  return h(
+    "header.screen-head",
+    null,
+    h("span.sh-medal", { "aria-hidden": "true" }, icon),
+    h("div.sh-text", null, h("h2", null, title), h("p", null, text)),
+  );
 }
 
 export function sectionTitle(text: string, sub?: string): HTMLElement {
@@ -130,7 +136,7 @@ export function modal(
   const panel = h(
     `div.modal${opts.cls ? `.${opts.cls}` : ""}`,
     { role: "dialog", "aria-modal": "true", "aria-labelledby": titleId, tabindex: "-1", onclick: (e: Event) => e.stopPropagation() },
-    h("div.modal-head", null, h("h3", { id: titleId }, title), opts.dismissable === false ? null : h("button.icon-btn", { type: "button", "aria-label": "Закрыть", onclick: close }, "✕")),
+    h("div.modal-head", null, h("h3", { id: titleId }, title), opts.dismissable === false ? null : h("button.icon-btn.modal-close", { type: "button", "aria-label": "Закрыть", onclick: close }, "✕")),
     body,
   );
   const root = h("div.modal-backdrop", { onclick: () => opts.dismissable !== false && close() }, panel);

@@ -30,7 +30,7 @@ export function profileScreen(app: App): Screen {
           field("Факультет", fac ? `«${fac.name}» — ${fac.field}` : "не выбран"),
           field("ID", d.player.id.slice(0, 10).toUpperCase()),
           field("Кошелёк", addr ? shortAddress(addr) : "гостевой режим"),
-          field("Кошелёк", d.wallet.linkedToProfile ? "✓ привязан к профилю" : "не привязан"),
+          field("Привязка", d.wallet.linkedToProfile ? "✓ кошелёк в профиле" : "нет"),
           field("Значки-NFT", `${Object.keys(d.wallet.minted).length}/4`),
         ),
       ),

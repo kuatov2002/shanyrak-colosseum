@@ -4,7 +4,7 @@ import { MISSIONS } from "../../gameplay/modes";
 import { COSMETIC_BY_ID } from "../../meta/collection";
 import { ROOMS } from "../../meta/rooms";
 import type { App, Screen } from "../app";
-import { button, sectionTitle } from "../components/common";
+import { button, screenIntro } from "../components/common";
 import { hub } from "../components/shell";
 import { h } from "../dom";
 
@@ -15,7 +15,7 @@ export function campaignScreen(app: App): Screen {
     shell.body.innerHTML = "";
     shell.body.append(
       h("div.back-row", null, button("← Кампус", () => app.router.go("home"), { kind: "ghost" })),
-      sectionTitle("Кампания «Семестр»", "Каждая миссия учит новой механике. Первое прохождение даёт награду."),
+      screenIntro("📚", "Кампания «Семестр»", "Каждая миссия учит новой механике. Первое прохождение даёт награду."),
     );
     const list = h("div.mission-list");
     MISSIONS.forEach((m, i) => {

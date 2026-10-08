@@ -20,7 +20,13 @@ export function h(spec: string, props?: Props | null, ...children: Child[]): HTM
       if (v === undefined || v === null || v === false) continue;
       if (k === "style") {
         if (typeof v === "string") el.setAttribute("style", v);
-        else Object.assign(el.style, v);
+        else {
+          // custom properties (--fac etc.) need setProperty; Object.assign silently drops them
+          for (const [sk, sv] of Object.entries(v as Record<string, string>)) {
+            if (sk.startsWith("--")) el.style.setProperty(sk, String(sv));
+            else (el.style as unknown as Record<string, string>)[sk] = sv;
+          }
+        }
       } else if (k === "dataset") {
         Object.assign(el.dataset, v as Record<string, string>);
       } else if (k === "class" || k === "className") {
