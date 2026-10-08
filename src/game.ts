@@ -109,7 +109,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
   touchStreak(store);
 
   const sound = new Sound();
-  sound.setVolumes(store.data.settings.sfx, store.data.settings.music);
+  sound.setVolumes(store.data.settings.sfx, store.data.settings.music, store.data.settings.ambient);
   sound.setTheme(store.data.equipped.music as "mus_campus");
 
   const renderer = await PixiRenderer.create(root, bootProgress);
@@ -412,7 +412,11 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
     },
     frame(_alpha, frameDt) {
       renderer.update(frameDt);
-      if (app.round && renderer.view === app.round) sound.setWind(app.round.wind);
+      // audio follows the scene: wind and the busier arrangement only while a round is on screen
+      const r = app.round && renderer.view === app.round ? app.round : null;
+      sound.setScene(r ? "round" : "menu");
+      sound.setIntensity(r && (r.combo >= 3 || r.shabytLevel > 0 || r.height >= 10) ? 1 : 0);
+      if (r) sound.setWind(r.wind);
     },
   }, renderer.app.ticker);
   loop.start();
@@ -485,6 +489,7 @@ async function bootGame(root: HTMLElement, opts: MountOptions): Promise<GameHand
       loop.dispose();
       ro?.disconnect();
       sound.stopMusic();
+      sound.dispose();
       for (const off of detachRound) off();
       for (const [t, type, fn] of listeners) t.removeEventListener(type, fn);
       renderer.dispose();

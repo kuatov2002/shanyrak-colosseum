@@ -42,6 +42,7 @@ export function roundScreen(app: App): Screen {
   const openPause = () => {
     if (round.phase === "done" || pauseModal) return;
     round.paused = true;
+    app.sound.setPaused(true);
     let resume = () => {};
     pauseModal = modal("Пауза", (body, close) => {
       const d = app.store.data;
@@ -49,6 +50,7 @@ export function roundScreen(app: App): Screen {
         close();
         pauseModal = null;
         round.paused = false;
+        app.sound.setPaused(false);
       };
       body.append(
         h("p.muted.center", null, `${MODES[cfg.mode].name} · ${round.height} эт. · ${fmt(round.score)} очков`),
@@ -65,6 +67,7 @@ export function roundScreen(app: App): Screen {
           close();
           pauseModal = null;
           round.paused = false;
+          app.sound.setPaused(false);
           if (isTutorial) skipTutorial();
           else round.quit();
         }, { kind: "danger" }),

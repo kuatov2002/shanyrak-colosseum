@@ -54,6 +54,8 @@ export interface Materials {
 export interface Settings {
   music: number;
   sfx: number;
+  /** Wind and campus crowd. */
+  ambient: number;
   vibration: boolean;
   reducedMotion: boolean;
   guide: boolean;
@@ -168,7 +170,7 @@ export function defaultSave(): SaveData {
     scores: [],
     lastTower: [],
     war: { lastRewardWeek: "" },
-    settings: { music: 0.5, sfx: 0.8, vibration: true, reducedMotion: false, guide: true, online: true, analytics: true },
+    settings: { music: 0.5, sfx: 0.8, ambient: 0.6, vibration: true, reducedMotion: false, guide: true, online: true, analytics: true },
     wallet: { address: null, walletName: null, linkedToProfile: false, records: [], minted: {}, pendingMints: {} },
   };
 }

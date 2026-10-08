@@ -1,283 +1,487 @@
-// Procedural audio (WebAudio, no files): every sound is synthesised so the build stays tiny and
-// the palette stays coherent — plucked dombra-like tones in a pentatonic scale, soft thuds, felt.
+// Procedural audio (WebAudio, no files). Signal flow:
+//
+//   music ─→ duck ─┐
+//   sfx ───────────┼─→ master ─→ limiter (DynamicsCompressor) ─→ speakers
+//   ambient ───────┘     ↑
+//   sends (10–25 %) ─→ convolver (synthetic 1.5 s room) ─┘
+//
+// Music: Karplus–Strong dombra, frame drum and shaker; three themes in folk modes × two
+// intensities (music.ts). Effects are layered (transient + body + tail) and peak-normalised by an
+// offline render at start-up (voices.ts). Ambience: wind with LFOs, a campus crowd murmur with
+// formant voices. The context resumes on the first gesture; pause and a hidden tab mute every bus.
 
-type MusicTheme = "mus_campus" | "mus_nauryz" | "mus_session";
+import { dombraNote, noiseBuffer, roomImpulse } from "./dsp";
+import { degreeHz, playStep, stepSeconds, THEMES, type MusicTheme, type StringState } from "./music";
+import { blip, SFX, SFX_LEVEL, type SfxName, type VoiceOut } from "./voices";
 
-// D minor pentatonic-ish scale for chimes (Hz)
-const SCALE = [293.66, 349.23, 392.0, 440.0, 523.25, 587.33, 698.46, 783.99, 880.0, 1046.5, 1174.66];
+export type { MusicTheme } from "./music";
+
+/** Bus trims at volume 1.0 (settings sliders scale these). */
+const MUSIC_TRIM = 0.42;
+const SFX_TRIM = 0.9;
+const AMB_TRIM = 0.55;
+/** Reverb sends of the music and ambient buses (effects set their own, 10–30 %). */
+const MUSIC_SEND = 0.22;
+const AMB_SEND = 0.12;
+/** −3 dB under the finale sting. */
+const DUCK = 0.708;
+const REVERB_RETURN = 0.8;
+const NOTE_CACHE = 64;
 
 export class Sound {
-  private ctx: AudioContext | null = null;
-  private master: GainNode | null = null;
-  private sfxBus: GainNode | null = null;
-  private musicBus: GainNode | null = null;
-  private noise: AudioBuffer | null = null;
-  private windSrc: AudioBufferSourceNode | null = null;
-  private windGain: GainNode | null = null;
-  private musicTimer: ReturnType<typeof setInterval> | null = null;
-  private nextNoteTime = 0;
-  private step = 0;
+  private ac: AudioContext | null = null;
+  private master!: GainNode;
+  private musicBus!: GainNode;
+  private musicDuck!: GainNode;
+  private sfxBus!: GainNode;
+  /** Reverb send of the effects; follows the sfx bus gain so pause/volume mute the tails too. */
+  private sfxWet!: GainNode;
+  private ambBus!: GainNode;
+  private reverbIn!: GainNode;
+  private reverbOut!: GainNode;
+  private noise!: AudioBuffer;
+  private notes = new Map<string, AudioBuffer>();
+  private norm: Partial<Record<SfxName, number>> = {};
+  private paused = false;
+  private hidden = false;
   private theme: MusicTheme = "mus_campus";
+  private intensity = 0;
+  private scene: "menu" | "round" = "menu";
+  private musicWanted = false;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private nextStepT = 0;
+  private step = 0;
+  private strings: StringState = { melody: null };
+  private windGain: GainNode | null = null;
+  private crowdGain: GainNode | null = null;
+  private cheerUntil = 0;
+  private nextBlipT = 0;
+  private upliftK = 0;
+  private upliftT = 0;
   sfxVolume = 0.8;
   musicVolume = 0.5;
-  private musicWanted = false;
+  ambientVolume = 0.6;
 
   /** Must be called from a user gesture (browsers block autoplay). */
   unlock(): void {
-    if (this.ctx) {
-      if (this.ctx.state === "suspended") void this.ctx.resume();
+    if (this.ac) {
+      if (this.ac.state === "suspended" && !this.hidden) void this.ac.resume();
       return;
     }
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
     try {
-      this.ctx = new AC();
+      this.ac = new AC();
     } catch {
       return;
     }
-    const ctx = this.ctx;
-    this.master = ctx.createGain();
+    const ac = this.ac;
+    this.noise = noiseBuffer(ac, 3);
+
+    const limiter = ac.createDynamicsCompressor();
+    limiter.threshold.value = -6;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.15;
+    const out = ac.createGain();
+    out.gain.value = 0.95;
+    this.master = ac.createGain();
     this.master.gain.value = 0.9;
-    this.master.connect(ctx.destination);
-    this.sfxBus = ctx.createGain();
-    this.sfxBus.gain.value = this.sfxVolume;
+    this.master.connect(limiter).connect(out).connect(ac.destination);
+
+    const conv = ac.createConvolver();
+    conv.buffer = roomImpulse(ac, 1.5);
+    this.reverbIn = ac.createGain();
+    this.reverbOut = ac.createGain();
+    this.reverbIn.connect(conv).connect(this.reverbOut).connect(this.master);
+
+    this.musicBus = ac.createGain();
+    this.musicDuck = ac.createGain();
+    this.musicBus.connect(this.musicDuck).connect(this.master);
+    this.send(this.musicDuck, MUSIC_SEND);
+    this.sfxBus = ac.createGain();
     this.sfxBus.connect(this.master);
-    this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = this.musicVolume * 0.35;
-    this.musicBus.connect(this.master);
-    const len = ctx.sampleRate * 2;
-    this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
-    const data = this.noise.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-    if (this.musicWanted) this.startMusic(this.theme);
+    this.sfxWet = ac.createGain();
+    this.sfxWet.connect(this.reverbIn);
+    this.ambBus = ac.createGain();
+    this.ambBus.connect(this.master);
+    this.send(this.ambBus, AMB_SEND);
+    for (const g of [this.musicBus, this.sfxBus, this.sfxWet, this.ambBus, this.reverbOut]) g.gain.value = 0;
+
+    this.buildAmbience();
+    this.hidden = document.hidden;
+    document.addEventListener("visibilitychange", this.onVisibility);
+    this.applyGains();
+    this.timer = setInterval(() => this.tick(), 50);
+    // measure every effect offline once the first tap has been answered
+    setTimeout(() => void this.calibrate(), 600);
+    this.prewarm();
   }
 
-  setVolumes(sfx: number, music: number): void {
+  /** Synthesise the theme's notes in idle time (~6 ms each) so the first bars never hitch. */
+  private prewarm(): void {
+    if (!this.ac) return;
+    const theme = this.theme;
+    const def = THEMES[theme];
+    const jobs: [number, number][] = [];
+    const degrees = new Set<number>();
+    for (const p of def.phrases) for (const d of p) if (d >= 0) degrees.add(d);
+    for (const d of degrees) jobs.push([degreeHz(theme, d), 0.5]);
+    const root = def.tonic / 2;
+    jobs.push([root, 0.5], [root * 1.5, 0.5], [root, 0.8], [root * 1.5, 0.8]);
+    for (let d = 2; d <= 12; d++) jobs.push([degreeHz(theme, d), 0.8]);
+    type Idle = (cb: (d: { timeRemaining(): number }) => void) => void;
+    const idle: Idle =
+      (window as unknown as { requestIdleCallback?: Idle }).requestIdleCallback ?? ((cb) => setTimeout(() => cb({ timeRemaining: () => 10 }), 40));
+    const run = (deadline: { timeRemaining(): number }) => {
+      while (jobs.length && this.ac && deadline.timeRemaining() > 7) {
+        const [f, b] = jobs.shift()!;
+        this.note(f, b);
+      }
+      if (jobs.length && this.ac && this.theme === theme) idle(run);
+    };
+    idle(run);
+  }
+
+  private send(from: AudioNode, amount: number): void {
+    const s = this.ac!.createGain();
+    s.gain.value = amount;
+    from.connect(s).connect(this.reverbIn);
+  }
+
+  private readonly onVisibility = () => {
+    if (!this.ac) return;
+    this.hidden = document.hidden;
+    this.applyGains();
+    if (this.hidden) void this.ac.suspend();
+    else void this.ac.resume();
+  };
+
+  /** Bus gains from the settings; pause and a hidden tab take every bus to silence. */
+  private applyGains(): void {
+    const ac = this.ac;
+    if (!ac) return;
+    const mute = this.paused || this.hidden;
+    const t = ac.currentTime;
+    const set = (g: GainNode, v: number) => {
+      g.gain.cancelScheduledValues(t);
+      g.gain.setTargetAtTime(mute ? 0 : v, t, 0.03);
+    };
+    set(this.musicBus, this.musicVolume * MUSIC_TRIM);
+    set(this.sfxBus, this.sfxVolume * SFX_TRIM);
+    set(this.sfxWet, this.sfxVolume * SFX_TRIM);
+    set(this.ambBus, this.ambientVolume * AMB_TRIM);
+    set(this.reverbOut, REVERB_RETURN);
+  }
+
+  setVolumes(sfx: number, music: number, ambient = this.ambientVolume): void {
     this.sfxVolume = sfx;
     this.musicVolume = music;
-    if (this.sfxBus) this.sfxBus.gain.value = sfx;
-    if (this.musicBus) this.musicBus.gain.value = music * 0.35;
+    this.ambientVolume = ambient;
+    this.applyGains();
   }
 
-  private tone(freq: number, dur: number, type: OscillatorType, vol: number, when = 0, attack = 0.005, bus?: GainNode | null): void {
-    const ctx = this.ctx;
-    const out = bus ?? this.sfxBus;
-    if (!ctx || !out) return;
-    const t = ctx.currentTime + when;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + attack);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g);
-    g.connect(out);
-    o.start(t);
-    o.stop(t + dur + 0.02);
+  /** Round paused (or resumed): all buses and the reverb tails fade out/in, the sequencer holds its place. */
+  setPaused(paused: boolean): void {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    this.applyGains();
   }
 
-  /** Plucked string: saw through a closing low-pass — reads as dombra. */
-  private pluck(freq: number, dur: number, vol: number, when = 0, bus?: GainNode | null): void {
-    const ctx = this.ctx;
-    const out = bus ?? this.sfxBus;
-    if (!ctx || !out) return;
-    const t = ctx.currentTime + when;
-    const o = ctx.createOscillator();
-    const f = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-    o.type = "sawtooth";
-    o.frequency.setValueAtTime(freq, t);
-    f.type = "lowpass";
-    f.frequency.setValueAtTime(freq * 6, t);
-    f.frequency.exponentialRampToValueAtTime(freq * 1.2, t + dur * 0.8);
-    f.Q.value = 2;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(f);
-    f.connect(g);
-    g.connect(out);
-    o.start(t);
-    o.stop(t + dur + 0.02);
+  get isPaused(): boolean {
+    return this.paused;
   }
 
-  private noiseBurst(dur: number, vol: number, filter: BiquadFilterType, freq: number, when = 0): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.sfxBus || !this.noise) return;
-    const t = ctx.currentTime + when;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noise;
-    const f = ctx.createBiquadFilter();
-    f.type = filter;
-    f.frequency.value = freq;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f);
-    f.connect(g);
-    g.connect(this.sfxBus);
-    src.start(t, Math.random());
-    src.stop(t + dur + 0.02);
+  /** 0 = dombra alone, 1 = with frame drum, shaker and up-strokes. */
+  setIntensity(level: number): void {
+    this.intensity = level > 0 ? 1 : 0;
+  }
+
+  /** Menus are quieter than a round: softer crowd, no wind. */
+  setScene(scene: "menu" | "round"): void {
+    if (scene === this.scene) return;
+    this.scene = scene;
+    if (scene === "menu") this.setWind(0);
+    this.crowdTo(this.crowdBase(), 0.6);
+  }
+
+  // ── buffers ─────────────────────────────────────────────────────────────
+
+  private note(freq: number, bright = 0.55): AudioBuffer {
+    const ac = this.ac!;
+    const b = bright >= 0.65 ? 0.8 : 0.5;
+    const key = `${Math.round(freq * 4)}|${b}`;
+    let buf = this.notes.get(key);
+    if (buf) {
+      // keep recently used notes at the end of the map (LRU)
+      this.notes.delete(key);
+      this.notes.set(key, buf);
+      return buf;
+    }
+    const data = dombraNote(ac.sampleRate, freq, { bright: b, t60: Math.min(1.8, 1.0 + 150 / freq) });
+    buf = ac.createBuffer(1, data.length, ac.sampleRate);
+    buf.copyToChannel(data, 0);
+    this.notes.set(key, buf);
+    if (this.notes.size > NOTE_CACHE) this.notes.delete(this.notes.keys().next().value as string);
+    return buf;
+  }
+
+  private voice(out: AudioNode, send: AudioNode, ac: BaseAudioContext = this.ac!): VoiceOut {
+    return { ac, out, send, noise: this.noise, note: (f, b) => this.note(f, b), degree: (d) => degreeHz(this.theme, d) };
+  }
+
+  /** Render every effect offline and scale it to its designed peak (SFX_LEVEL). */
+  private async calibrate(): Promise<void> {
+    const ac = this.ac;
+    if (!ac || typeof OfflineAudioContext === "undefined") return;
+    const sr = ac.sampleRate;
+    for (const name of Object.keys(SFX) as SfxName[]) {
+      try {
+        const dur = name === "crown" ? 3.6 : name === "collapse" ? 2.2 : 1.4;
+        const oc = new OfflineAudioContext(1, Math.ceil(sr * dur), sr);
+        SFX[name](this.voice(oc.destination, oc.createGain(), oc), 0.01, 3);
+        const d = (await oc.startRendering()).getChannelData(0);
+        let peak = 0;
+        for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+        if (peak > 1e-4) this.norm[name] = Math.min(4, Math.max(0.2, SFX_LEVEL[name] / peak));
+      } catch {
+        /* keep unity gain for this one */
+      }
+    }
+  }
+
+  /** Peak-normalisation gains measured at start-up (for the listening report). */
+  get normalisation(): Readonly<Partial<Record<SfxName, number>>> {
+    return this.norm;
+  }
+
+  // ── effects ─────────────────────────────────────────────────────────────
+
+  private fx(name: SfxName, k = 0): void {
+    const ac = this.ac;
+    if (!ac || this.paused || this.hidden || this.sfxVolume <= 0) return;
+    const n = this.norm[name] ?? 1;
+    const dry = ac.createGain();
+    dry.gain.value = n;
+    dry.connect(this.sfxBus);
+    const wet = ac.createGain();
+    wet.gain.value = n;
+    wet.connect(this.sfxWet);
+    SFX[name](this.voice(dry, wet), ac.currentTime + 0.005, k);
+    setTimeout(() => {
+      dry.disconnect();
+      wet.disconnect();
+    }, 5000);
   }
 
   click(): void {
-    this.tone(880, 0.06, "triangle", 0.12);
+    this.fx("click");
   }
   drop(): void {
-    this.noiseBurst(0.18, 0.08, "bandpass", 900);
+    this.fx("drop");
   }
   thud(heavy = false): void {
-    this.tone(heavy ? 70 : 95, heavy ? 0.35 : 0.22, "sine", heavy ? 0.5 : 0.38);
-    this.noiseBurst(0.12, 0.12, "lowpass", 400);
+    this.fx(heavy ? "placeHeavy" : "place");
   }
   perfect(combo: number): void {
-    this.thud();
-    const i = Math.min(SCALE.length - 3, 2 + combo);
-    this.pluck(SCALE[i], 0.5, 0.22, 0.02);
-    this.tone(SCALE[i + 2], 0.6, "triangle", 0.12, 0.08);
-    this.tone(SCALE[i] * 2, 0.4, "sine", 0.05, 0.12);
+    this.fx("perfect", combo);
+    this.cheer(combo >= 3 ? 1.1 : 0.6);
   }
   good(): void {
-    this.thud();
-    this.pluck(SCALE[3], 0.35, 0.14, 0.02);
+    this.fx("good");
   }
   bad(): void {
-    this.thud(true);
-    this.noiseBurst(0.25, 0.22, "highpass", 2200, 0.02);
-    this.tone(140, 0.4, "sawtooth", 0.06, 0.05);
+    this.fx("crack");
   }
   miss(): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.sfxBus) return;
-    const t = ctx.currentTime;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "triangle";
-    o.frequency.setValueAtTime(600, t);
-    o.frequency.exponentialRampToValueAtTime(120, t + 0.6);
-    g.gain.setValueAtTime(0.15, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.65);
-    o.connect(g);
-    g.connect(this.sfxBus);
-    o.start(t);
-    o.stop(t + 0.7);
-    this.noiseBurst(0.4, 0.25, "lowpass", 600, 0.55);
+    this.fx("miss");
   }
   collapse(): void {
-    this.tone(55, 1.2, "sine", 0.5);
-    this.noiseBurst(1.2, 0.35, "lowpass", 300);
-    this.noiseBurst(0.6, 0.2, "bandpass", 1200, 0.3);
+    this.fx("collapse");
   }
   warning(): void {
-    this.tone(330, 0.15, "square", 0.05);
-    this.tone(330, 0.15, "square", 0.05, 0.22);
+    this.fx("warning");
   }
   event(): void {
-    [0, 2, 4].forEach((k, i) => this.pluck(SCALE[k], 0.5, 0.15, i * 0.09));
+    this.fx("event");
   }
   bonus(): void {
-    [2, 4, 6, 8].forEach((k, i) => this.pluck(SCALE[k], 0.4, 0.13, i * 0.07));
+    this.fx("bonus");
   }
+  /** Combo uplift / coins: each call within two seconds climbs a step. */
   coin(): void {
-    this.tone(1318, 0.08, "square", 0.05);
-    this.tone(1760, 0.12, "square", 0.05, 0.07);
+    const now = this.ac?.currentTime ?? 0;
+    this.upliftK = now - this.upliftT < 2 ? Math.min(6, this.upliftK + 1) : 0;
+    this.upliftT = now;
+    this.fx("uplift", this.upliftK);
   }
   shabyt(): void {
-    [4, 6, 8, 10].forEach((k, i) => this.tone(SCALE[k], 0.5, "triangle", 0.1, i * 0.06));
+    this.fx("shabyt");
+    this.cheer(1.4);
   }
+  /** The shanyrak finale: music ducks −3 dB under the sting, the crowd cheers. */
   crown(): void {
-    // gentle major-ish swell + dombra arpeggio
-    [SCALE[0], SCALE[2], SCALE[4]].forEach((f) => this.tone(f, 2.2, "sine", 0.1, 0, 0.4));
-    [0, 2, 4, 5, 7, 9].forEach((k, i) => this.pluck(SCALE[k], 0.7, 0.14, 0.2 + i * 0.11));
+    const ac = this.ac;
+    if (ac) {
+      const t = ac.currentTime;
+      const g = this.musicDuck.gain;
+      g.cancelScheduledValues(t);
+      g.setTargetAtTime(DUCK, t, 0.05);
+      g.setTargetAtTime(1, t + 3.4, 0.5);
+    }
+    this.fx("crown");
+    this.cheer(3);
   }
   reward(): void {
-    [5, 7, 9].forEach((k, i) => this.tone(SCALE[k], 0.3, "triangle", 0.1, i * 0.08));
+    this.fx("reward");
+  }
+
+  // ── ambience ────────────────────────────────────────────────────────────
+
+  private buildAmbience(): void {
+    const ac = this.ac!;
+    const lfo = (freq: number, depth: number, target: AudioParam) => {
+      const o = ac.createOscillator();
+      o.frequency.value = freq;
+      const g = ac.createGain();
+      g.gain.value = depth;
+      o.connect(g).connect(target);
+      o.start();
+    };
+    // Wind: band-passed noise whose centre wanders (LFO) and whose level gusts (second LFO), with a
+    // narrow whistle band on top that only shows when the wind is strong.
+    const wsrc = ac.createBufferSource();
+    wsrc.buffer = this.noise;
+    wsrc.loop = true;
+    const bp = ac.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 480;
+    bp.Q.value = 0.9;
+    lfo(0.11, 190, bp.frequency);
+    const whistle = ac.createBiquadFilter();
+    whistle.type = "bandpass";
+    whistle.frequency.value = 1150;
+    whistle.Q.value = 7;
+    lfo(0.17, 140, whistle.frequency);
+    const whistleGain = ac.createGain();
+    whistleGain.gain.value = 0.3;
+    const gust = ac.createGain();
+    gust.gain.value = 0.8;
+    lfo(0.23, 0.35, gust.gain);
+    this.windGain = ac.createGain();
+    this.windGain.gain.value = 0;
+    wsrc.connect(bp).connect(gust);
+    wsrc.connect(whistle).connect(whistleGain).connect(gust);
+    gust.connect(this.windGain).connect(this.ambBus);
+    wsrc.start(0, 0.4);
+    // Crowd murmur: speech-band noise under three slow amplitude LFOs (a babble); the formant
+    // voices on top are scheduled in tick().
+    const csrc = ac.createBufferSource();
+    csrc.buffer = this.noise;
+    csrc.loop = true;
+    const low = ac.createBiquadFilter();
+    low.type = "bandpass";
+    low.frequency.value = 520;
+    low.Q.value = 0.7;
+    const high = ac.createBiquadFilter();
+    high.type = "bandpass";
+    high.frequency.value = 1500;
+    high.Q.value = 1.2;
+    const highGain = ac.createGain();
+    highGain.gain.value = 0.5;
+    const am = ac.createGain();
+    am.gain.value = 0.6;
+    for (const f of [0.37, 0.53, 0.71]) lfo(f, 0.13, am.gain);
+    this.crowdGain = ac.createGain();
+    this.crowdGain.gain.value = this.crowdBase();
+    csrc.connect(low).connect(am);
+    csrc.connect(high).connect(highGain).connect(am);
+    am.connect(this.crowdGain).connect(this.ambBus);
+    csrc.start(0, 1.7);
+  }
+
+  private crowdBase(): number {
+    return this.scene === "round" ? 0.12 : 0.07;
+  }
+
+  private crowdTo(v: number, tc: number): void {
+    if (!this.ac || !this.crowdGain) return;
+    this.crowdGain.gain.setTargetAtTime(v, this.ac.currentTime, tc);
+  }
+
+  /** The crowd swells and more voices call out for `seconds`. */
+  private cheer(seconds: number): void {
+    const ac = this.ac;
+    if (!ac || !this.crowdGain) return;
+    const t = ac.currentTime;
+    this.cheerUntil = Math.max(this.cheerUntil, t + seconds);
+    const g = this.crowdGain.gain;
+    g.cancelScheduledValues(t);
+    g.setTargetAtTime(this.crowdBase() * 2.2, t, 0.08);
+    g.setTargetAtTime(this.crowdBase(), this.cheerUntil, 0.5);
   }
 
   setWind(strength: number): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.sfxBus || !this.noise) return;
-    if (!this.windSrc && strength > 0.02) {
-      this.windSrc = ctx.createBufferSource();
-      this.windSrc.buffer = this.noise;
-      this.windSrc.loop = true;
-      const f = ctx.createBiquadFilter();
-      f.type = "bandpass";
-      f.frequency.value = 500;
-      f.Q.value = 0.7;
-      this.windGain = ctx.createGain();
-      this.windGain.gain.value = 0;
-      this.windSrc.connect(f);
-      f.connect(this.windGain);
-      this.windGain.connect(this.sfxBus);
-      this.windSrc.start();
-    }
-    if (this.windGain) this.windGain.gain.setTargetAtTime(strength * 0.18, ctx.currentTime, 0.3);
+    if (!this.ac || !this.windGain) return;
+    this.windGain.gain.setTargetAtTime(Math.min(1, Math.max(0, strength)) * 0.5, this.ac.currentTime, 0.4);
   }
 
-  // ── Music: a small generative dombra loop ────────────────────────────────
+  // ── music ───────────────────────────────────────────────────────────────
 
   startMusic(theme: MusicTheme): void {
     this.musicWanted = true;
-    this.theme = theme;
-    if (!this.ctx) return;
-    if (this.musicTimer) return;
-    this.nextNoteTime = this.ctx.currentTime + 0.1;
-    this.step = 0;
-    this.musicTimer = setInterval(() => this.schedule(), 60);
+    this.setTheme(theme);
   }
 
   setTheme(theme: MusicTheme): void {
+    if (theme === this.theme) return;
     this.theme = theme;
+    this.step = 0;
+    this.prewarm();
   }
 
   stopMusic(): void {
     this.musicWanted = false;
-    if (this.musicTimer) clearInterval(this.musicTimer);
-    this.musicTimer = null;
   }
 
-  private schedule(): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.musicBus) return;
-    const bpm = this.theme === "mus_nauryz" ? 128 : this.theme === "mus_session" ? 76 : 96;
-    const spb = 60 / bpm / 2; // eighth notes
-    const patterns: Record<MusicTheme, number[]> = {
-      // indices into SCALE, -1 = rest; a dombra kui-like figure: drone + melody
-      mus_campus: [0, 4, 2, 4, 3, 4, 2, -1, 0, 4, 2, 4, 5, 4, 3, 2],
-      mus_nauryz: [0, 2, 4, 5, 4, 2, 4, 7, 5, 4, 2, 4, 0, 2, 4, -1],
-      mus_session: [0, -1, 2, -1, 4, -1, 3, -1, 0, -1, 2, -1, 1, -1, 0, -1],
-    };
-    const pat = patterns[this.theme];
-    while (this.nextNoteTime < ctx.currentTime + 0.25) {
-      const when = this.nextNoteTime - ctx.currentTime;
-      const n = pat[this.step % pat.length];
-      if (n >= 0) this.pluck(SCALE[n] / (this.theme === "mus_session" ? 2 : 1), spb * 2.4, 0.16, when, this.musicBus);
-      if (this.step % 4 === 0) this.pluck(SCALE[0] / 2, spb * 3.5, 0.1, when, this.musicBus); // drone string
-      if (this.theme === "mus_nauryz" && this.step % 2 === 1) this.noiseBurstMusic(when);
-      this.nextNoteTime += spb;
-      this.step++;
+  /** Lookahead scheduler (50 ms timer, 200 ms horizon): music steps and crowd voices. */
+  private tick(): void {
+    const ac = this.ac;
+    if (!ac || ac.state !== "running") return;
+    const now = ac.currentTime;
+    if (this.paused || this.hidden) {
+      this.nextStepT = now + 0.1;
+      this.nextBlipT = now + 0.3;
+      return;
+    }
+    if (this.musicWanted && this.musicVolume > 0) {
+      if (this.nextStepT < now) this.nextStepT = now + 0.05;
+      const v = this.voice(this.musicBus, this.reverbIn);
+      while (this.nextStepT < now + 0.2) {
+        playStep(v, this.strings, this.theme, this.step, this.nextStepT, this.intensity);
+        this.nextStepT += stepSeconds(this.theme);
+        this.step++;
+      }
+    }
+    if (this.ambientVolume > 0) {
+      if (this.nextBlipT < now) this.nextBlipT = now + 0.05;
+      const v = this.voice(this.ambBus, this.reverbIn);
+      while (this.nextBlipT < now + 0.2) {
+        const cheer = this.nextBlipT < this.cheerUntil;
+        blip(v, this.ambBus, this.nextBlipT, (cheer ? 0.09 : 0.04) * (this.scene === "round" ? 1 : 0.6), cheer);
+        this.nextBlipT += cheer ? 0.05 + Math.random() * 0.12 : 0.35 + Math.random() * 0.9;
+      }
     }
   }
 
-  private noiseBurstMusic(when: number): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.musicBus || !this.noise) return;
-    const t = ctx.currentTime + when;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noise;
-    const f = ctx.createBiquadFilter();
-    f.type = "highpass";
-    f.frequency.value = 6000;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.04, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-    src.connect(f);
-    f.connect(g);
-    g.connect(this.musicBus);
-    src.start(t, Math.random());
-    src.stop(t + 0.06);
+  /** Stop the scheduler and release the audio device (game unmounted). */
+  dispose(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    document.removeEventListener("visibilitychange", this.onVisibility);
+    void this.ac?.close();
+    this.ac = null;
   }
 
   vibrate(pattern: number | number[]): void {

@@ -37,12 +37,16 @@ export function settingsScreen(app: App): Screen {
       h("h2", null, "Настройки"),
       slider("🎵 Музыка", s.music, (v) => {
         app.store.mutate((x) => (x.settings.music = v));
-        app.sound.setVolumes(app.store.data.settings.sfx, v);
+        app.sound.setVolumes(app.store.data.settings.sfx, v, app.store.data.settings.ambient);
       }),
       slider("🔊 Звуки", s.sfx, (v) => {
         app.store.mutate((x) => (x.settings.sfx = v));
-        app.sound.setVolumes(v, app.store.data.settings.music);
+        app.sound.setVolumes(v, app.store.data.settings.music, app.store.data.settings.ambient);
         app.sound.click();
+      }),
+      slider("🌬️ Атмосфера", s.ambient, (v) => {
+        app.store.mutate((x) => (x.settings.ambient = v));
+        app.sound.setVolumes(app.store.data.settings.sfx, app.store.data.settings.music, v);
       }),
       toggle("Вибрация", "На телефонах при укладке и обрушении", s.vibration, (v) => app.store.mutate((x) => (x.settings.vibration = v))),
       toggle("Меньше движения", "Без тряски экрана и вспышек, меньше частиц", s.reducedMotion, (v) => app.store.mutate((x) => (x.settings.reducedMotion = v))),
