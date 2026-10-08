@@ -2,7 +2,8 @@
 // faculty_*) via client.leaderboard.submitScore. No Solana transactions are involved.
 // Offline (or while a fresh board is still empty): the player's own local results plus clearly
 // labelled demo rivals, so a board is never an unexplained empty list.
-// iDos answers each board in ~2 s, so the last answer of every board is cached on the device:
+// Board calls are rate-limited and go through one spaced queue (IdosBackend), so five faculty
+// boards take a few seconds. The last answer of every board is therefore cached on the device:
 // screens show it at once and refresh in the background, and boards are prefetched after login.
 
 import type { LocalScore } from "../core/save";

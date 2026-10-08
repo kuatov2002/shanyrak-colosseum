@@ -30,9 +30,25 @@ export class IdosBackend implements Backend {
   readonly kind = "idos" as const;
   private client: IdosClient | null = null;
   private connected = false;
-  /** iDos answers a board in ~2 s and holds back bursts (up to ~13 s), so board reads go one at a time. */
-  private boardQueue: Promise<unknown> = Promise.resolve();
+  /**
+   * iDos rate-limits leaderboard calls: back-to-back requests get 429 and the SDK retries ~2 s later
+   * (bursts stall up to ~13 s). Spaced at least GAP_MS apart they answer in ~0.3 s, so reads and
+   * submits share one queue with that spacing.
+   */
+  private queue: Promise<unknown> = Promise.resolve();
+  private lastStart = 0;
   private inflight = new Map<string, Promise<BoardResult>>();
+
+  private serial<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(async () => {
+      const wait = this.lastStart + GAP_MS - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      this.lastStart = Date.now();
+      return task();
+    });
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
   readonly titleId: string;
 
   /** Pass the host's signed-in client inside an iDos app; standalone builds create their own. */
@@ -80,8 +96,11 @@ export class IdosBackend implements Backend {
     if (!this.client || !this.connected) return { ok: false, error: "offline" };
     const s = Math.round(score);
     if (s <= 0) return { ok: true };
+    const client = this.client;
     try {
-      const res = await this.client.leaderboard.submitScore(boardId, s);
+      // a hung call must not block the queue for everything after it
+      const res = await this.serial(() => withTimeout(client.leaderboard.submitScore(boardId, s), 8000));
+      if (!res) return { ok: false, error: "timeout" };
       return res.ok ? { ok: true } : { ok: false, error: res.error };
     } catch (err) {
       return { ok: false, error: String(err) };
@@ -92,8 +111,7 @@ export class IdosBackend implements Backend {
     if (!this.client || !this.connected) return Promise.resolve({ ok: false, error: "offline" });
     const pending = this.inflight.get(boardId);
     if (pending) return pending;
-    const run = this.boardQueue.then(() => this.fetchBoard(boardId));
-    this.boardQueue = run.catch(() => undefined);
+    const run = this.serial(() => this.fetchBoard(boardId));
     this.inflight.set(boardId, run);
     void run.finally(() => this.inflight.delete(boardId));
     return run;
@@ -149,6 +167,9 @@ export class IdosBackend implements Backend {
     }
   }
 }
+
+/** Minimum spacing between the starts of two leaderboard calls (measured: 0.4 s already avoids 429). */
+const GAP_MS = 700;
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
